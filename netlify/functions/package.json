@@ -1,0 +1,8 @@
+{
+  "name": "bio-functions",
+  "version": "1.0.0",
+  "description": "Netlify Functions para Bío IA",
+  "dependencies": {
+    "@google/generative-ai": "^0.24.1"
+  }
+}
