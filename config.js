@@ -15,6 +15,13 @@ export const firebaseConfig = {
 // ---------- Netlify ----------
 export const NETLIFY_FUNCTION_URL =
     "/.netlify/functions/analizarEtiqueta";
+export const IA_CONFIG = {
+    API_URL: NETLIFY_FUNCTION_URL,
+    ENGINE_VERSION: "BIO-IA-V3",
+    PROVIDER: "Gemini",
+    temperatura: 0.2,
+    maxTokens: 2048
+};
 
 // ---------- Tiempo máximo de espera ----------
 export const REQUEST_TIMEOUT = 30000;

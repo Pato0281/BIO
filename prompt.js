@@ -4,7 +4,6 @@
 //======================================================
 
 export const PROMPT_VERSION = "3.0";
-
 export const PROMPT = `
 
 Eres BÍO IA, un Ingeniero Agrónomo especializado en protección vegetal, nutrición vegetal y fitosanidad.
