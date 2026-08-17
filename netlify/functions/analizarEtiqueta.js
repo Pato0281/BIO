@@ -58,7 +58,7 @@ exports.handler = async (event) => {
         // MODELO
         // =========================================
 
-        const model = "gemini-2.5-flash";
+        const model = "gemini-3.5-flash";
 
         // =========================================
         // ENVIAR IMAGEN + PROMPT A GEMINI
@@ -183,7 +183,7 @@ exports.handler = async (event) => {
 
                 proveedor: "Google Gemini",
 
-                modelo: "gemini-2.5-flash"
+                modelo: "gemini-3.5-flash"
 
             })
 
