@@ -55,16 +55,17 @@ exports.handler = async (event) => {
         });
 
         // =========================================
-        // MODELO
+        // MODELO ACTUAL
         // =========================================
 
-        const model = "gemini-3.5-flash";
+        const model = "gemini-3.6-flash";
 
         // =========================================
         // ENVIAR IMAGEN + PROMPT A GEMINI
         // =========================================
 
         const result = await ai.models.generateContent({
+
             model: model,
 
             contents: [
@@ -82,7 +83,15 @@ exports.handler = async (event) => {
                         }
                     ]
                 }
-            ]
+            ],
+
+            // =====================================
+            // RESPUESTA JSON ESTRUCTURADA
+            // =====================================
+
+            config: {
+                responseMimeType: "application/json"
+            }
         });
 
         // =========================================
@@ -98,7 +107,7 @@ exports.handler = async (event) => {
         }
 
         // =========================================
-        // LIMPIAR JSON
+        // LIMPIAR POSIBLES BLOQUES MARKDOWN
         // =========================================
 
         texto = texto
@@ -124,7 +133,7 @@ exports.handler = async (event) => {
             );
 
             throw new Error(
-                "Gemini no devolvió un JSON válido."
+                "Gemini devolvió una respuesta que no pudo convertirse a JSON."
             );
         }
 
@@ -183,7 +192,7 @@ exports.handler = async (event) => {
 
                 proveedor: "Google Gemini",
 
-                modelo: "gemini-3.5-flash"
+                modelo: "gemini-3.6-flash"
 
             })
 
