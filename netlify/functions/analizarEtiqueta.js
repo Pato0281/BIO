@@ -55,10 +55,16 @@ exports.handler = async (event) => {
         });
 
         // =========================================
-        // MODELO ACTUAL
+        // MODELO
         // =========================================
 
         const model = "gemini-3.6-flash";
+
+        console.log("=================================");
+        console.log("ANALIZANDO ETIQUETA");
+        console.log("Modelo:", model);
+        console.log("Imagen recibida: SI");
+        console.log("=================================");
 
         // =========================================
         // ENVIAR IMAGEN + PROMPT A GEMINI
@@ -71,6 +77,7 @@ exports.handler = async (event) => {
             contents: [
                 {
                     role: "user",
+
                     parts: [
                         {
                             text: prompt
@@ -86,7 +93,7 @@ exports.handler = async (event) => {
             ],
 
             // =====================================
-            // RESPUESTA JSON ESTRUCTURADA
+            // SOLICITAR RESPUESTA JSON
             // =====================================
 
             config: {
@@ -95,10 +102,10 @@ exports.handler = async (event) => {
         });
 
         // =========================================
-        // OBTENER RESPUESTA
+        // OBTENER RESPUESTA DE GEMINI
         // =========================================
 
-        let texto = result.text;
+        const texto = result.text;
 
         if (!texto) {
             throw new Error(
@@ -106,14 +113,8 @@ exports.handler = async (event) => {
             );
         }
 
-        // =========================================
-        // LIMPIAR POSIBLES BLOQUES MARKDOWN
-        // =========================================
-
-        texto = texto
-            .replace(/```json/gi, "")
-            .replace(/```/g, "")
-            .trim();
+        console.log("Respuesta recibida correctamente.");
+        console.log("Respuesta Gemini:", texto);
 
         // =========================================
         // CONVERTIR RESPUESTA A JSON
@@ -125,20 +126,33 @@ exports.handler = async (event) => {
 
             datos = JSON.parse(texto);
 
-        } catch (e) {
+        } catch (errorJSON) {
 
             console.error(
-                "Respuesta recibida desde Gemini:",
+                "ERROR CONVIRTIENDO RESPUESTA A JSON:",
                 texto
             );
 
             throw new Error(
-                "Gemini devolvió una respuesta que no pudo convertirse a JSON."
+                "Gemini devolvió una respuesta que no es JSON válido."
             );
         }
 
         // =========================================
-        // RESPUESTA FINAL
+        // VERIFICAR DATOS
+        // =========================================
+
+        if (!datos || typeof datos !== "object") {
+            throw new Error(
+                "Gemini devolvió datos vacíos o inválidos."
+            );
+        }
+
+        console.log("JSON convertido correctamente.");
+        console.log("Datos:", JSON.stringify(datos));
+
+        // =========================================
+        // RESPUESTA FINAL PARA IA.JS
         // =========================================
 
         return {
@@ -146,7 +160,8 @@ exports.handler = async (event) => {
             statusCode: 200,
 
             headers: {
-                "Content-Type": "application/json"
+                "Content-Type": "application/json",
+                "Cache-Control": "no-store"
             },
 
             body: JSON.stringify({
@@ -162,7 +177,6 @@ exports.handler = async (event) => {
                 datos: datos
 
             })
-
         };
 
     } catch (error) {
@@ -181,7 +195,8 @@ exports.handler = async (event) => {
             statusCode: 500,
 
             headers: {
-                "Content-Type": "application/json"
+                "Content-Type": "application/json",
+                "Cache-Control": "no-store"
             },
 
             body: JSON.stringify({
@@ -195,7 +210,6 @@ exports.handler = async (event) => {
                 modelo: "gemini-3.6-flash"
 
             })
-
         };
     }
 };
