@@ -157,14 +157,26 @@ async function enviarACloudFunction(base64){
 
     );
 
-    if(!response.ok){
+   if (!response.ok) {
 
-        throw new Error(
-            "No fue posible conectar con el servidor IA."
-        );
+    let detalle = "";
 
+    try {
+        detalle = await response.text();
+    } catch (e) {
+        detalle = "Sin información adicional.";
     }
 
+    console.error("ERROR HTTP DEL SERVIDOR IA:", {
+        status: response.status,
+        statusText: response.statusText,
+        detalle: detalle
+    });
+
+    throw new Error(
+        `Servidor IA respondió ${response.status} ${response.statusText}. ${detalle}`
+    );
+}
     return await response.json();
 
 }
