@@ -161,7 +161,7 @@ diferentes dosis según cultivo o plaga.
 En ese caso conserva la información diferenciada.
 
 El resultado debe ser exclusivamente un JSON válido,
-sin Markdown, sin ```json y sin explicaciones fuera del JSON.
+
 
 La estructura obligatoria es:
 
