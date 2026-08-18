@@ -39,11 +39,17 @@ exports.handler = async (event) => {
 
         const body = JSON.parse(event.body || "{}");
 
-        const imageBase64 = body.image || body.imageBase64;
+        let imageBase64 = body.image || body.imageBase64;
         const promptOriginal = body.prompt || "";
 
         if (!imageBase64) {
             throw new Error("No se recibió ninguna imagen.");
+        }
+
+        // Si llega como data:image/jpeg;base64,...
+        // eliminamos la cabecera.
+        if (imageBase64.includes(",")) {
+            imageBase64 = imageBase64.split(",")[1];
         }
 
         // =========================================
@@ -61,107 +67,183 @@ exports.handler = async (event) => {
         const model = "gemini-3.6-flash";
 
         // =========================================
-        // INSTRUCCIÓN PARA BIO IA
+        // PROMPT PRINCIPAL
         // =========================================
 
         const prompt = `
-Eres BIO IA, un asistente especializado en productos
-fitosanitarios agrícolas utilizados en Chile.
+Eres BIO IA, especialista en productos agrícolas y fitosanitarios utilizados en Chile.
 
-Tu trabajo tiene DOS ETAPAS:
+Tu trabajo tiene DOS ETAPAS OBLIGATORIAS.
 
+=========================================
 ETAPA 1 — IDENTIFICAR EL PRODUCTO
-Analiza la fotografía y determina con la mayor precisión posible:
+=========================================
+
+Analiza cuidadosamente la fotografía de la etiqueta.
+
+Identifica, si es posible:
 
 - nombre comercial
 - ingrediente activo
 - concentración
 - formulación
-- empresa/fabricante
+- empresa o fabricante
 - número de registro
 - contenido
 
-ETAPA 2 — INVESTIGAR Y COMPLETAR LA INFORMACIÓN
+La fotografía sirve principalmente para IDENTIFICAR EL PRODUCTO.
 
-Una vez identificado el producto, utiliza Google Search para
-buscar información técnica y regulatoria actualizada.
+=========================================
+ETAPA 2 — INVESTIGAR EL PRODUCTO
+=========================================
 
-PARA PRODUCTOS FITOSANITARIOS EN CHILE:
+Una vez identificado el producto, NO te limites a copiar la información visible en la fotografía.
 
-1. PRIORIDAD MÁXIMA:
-   Servicio Agrícola y Ganadero (SAG) de Chile.
+Debes investigar el producto mediante Google Search.
 
-2. Busca preferentemente:
-   - etiqueta oficial SAG
-   - registro SAG
-   - documentación oficial del producto
-   - ficha técnica oficial del fabricante
+La prioridad de las fuentes es:
 
-3. Como segunda fuente puedes utilizar:
-   - fabricante
-   - distribuidor oficial
-   - documentación técnica reconocida
+1. SAG Chile
+2. Registro o documentación oficial SAG
+3. Etiqueta oficial registrada en Chile
+4. Ficha técnica oficial del fabricante
+5. Documentación técnica confiable
 
-4. NO utilices una página comercial como fuente principal
-   si existe información oficial del SAG.
+Para productos fitosanitarios registrados en Chile, da prioridad absoluta a la información correspondiente al registro SAG chileno.
 
-5. Si existen diferencias entre fuentes, prioriza la
-   información oficial chilena correspondiente al registro
-   del producto.
+IMPORTANTE:
 
-INFORMACIÓN QUE DEBES INTENTAR COMPLETAR:
+Busca el producto por:
+
+- nombre comercial
+- ingrediente activo
+- número de registro SAG, si fue identificado
+- fabricante
+
+=========================================
+DATOS QUE DEBES INVESTIGAR
+=========================================
+
+Debes intentar completar TODOS estos campos:
 
 - dosis
-- mojamiento / volumen de agua
-- modo de acción
-- días de carencia
-- horas de reentrada
+- unidad de dosis
+- mojamiento o volumen de agua
 - cultivos autorizados
 - plagas objetivo
 - enfermedades
 - malezas
+- modo de acción
+- días de carencia
+- horas de reentrada
 - compatibilidad
 - observaciones
 
-MUY IMPORTANTE:
+=========================================
+DOSIS Y MOJAMIENTO
+=========================================
 
-NO INVENTES NINGÚN DATO.
+Este punto es MUY IMPORTANTE.
 
-Si una información no aparece en la etiqueta oficial,
-registro SAG o fuente técnica confiable, escribe:
+Busca específicamente las tablas de uso o aplicación.
 
-"No encontrado"
-
-Para DOSIS y MOJAMIENTO debes buscar específicamente
-las tablas de aplicación del producto, incluyendo:
+Debes buscar:
 
 - cultivo
 - plaga
 - dosis
-- volumen de agua / mojamiento
+- unidad de dosis
+- volumen de agua
+- mojamiento
 - número de aplicaciones
 - intervalo entre aplicaciones
 
-Para CARENCIA debes buscar específicamente el período
-de carencia indicado para cada cultivo.
+NO entregues una dosis genérica si existen diferentes dosis dependiendo del cultivo o plaga.
 
-Para REENTRADA debes buscar específicamente el período
-de reingreso o reentrada indicado en la etiqueta.
+Si existen varias combinaciones de cultivo y plaga, conserva TODAS las combinaciones relevantes.
 
-Para MODO DE ACCIÓN debes identificar el mecanismo o grupo
-de acción indicado oficialmente. Si existe una clasificación
-IRAC, FRAC, HRAC u otra, inclúyela cuando esté respaldada
-por una fuente confiable.
+Ejemplo:
 
-IMPORTANTE SOBRE DOSIS:
+Cultivo A:
+Plaga X:
+Dosis: ...
+Mojamiento: ...
 
-NO entregues una dosis genérica si la etiqueta establece
-diferentes dosis según cultivo o plaga.
+Cultivo B:
+Plaga Y:
+Dosis: ...
+Mojamiento: ...
 
-En ese caso conserva la información diferenciada.
+=========================================
+MODO DE ACCIÓN
+=========================================
 
-El resultado debe ser exclusivamente un JSON válido,
+Busca el modo de acción oficial.
 
+Si corresponde, incluye:
+
+- mecanismo de acción
+- grupo IRAC
+- grupo FRAC
+- grupo HRAC
+- otra clasificación oficial
+
+No inventes clasificaciones.
+
+=========================================
+CARENCIA
+=========================================
+
+Busca específicamente el período de carencia.
+
+Si existen diferentes períodos según cultivo, conserva cada uno.
+
+Ejemplo:
+
+Cultivo A: 7 días
+Cultivo B: 14 días
+
+=========================================
+REENTRADA
+=========================================
+
+Busca específicamente el período de reentrada o reingreso.
+
+No confundas:
+
+- carencia
+- reentrada
+
+Son datos diferentes.
+
+=========================================
+REGLA FUNDAMENTAL
+=========================================
+
+NO INVENTES NINGÚN DATO.
+
+Si después de realizar la búsqueda no encuentras un dato confiable, escribe exactamente:
+
+"No encontrado"
+
+No dejes el campo vacío cuando exista información confiable disponible.
+
+Si existen diferencias entre fuentes, prioriza la información oficial chilena asociada al registro SAG.
+
+=========================================
+RESULTADO
+=========================================
+
+Devuelve EXCLUSIVAMENTE un JSON válido.
+
+NO escribas:
+
+- Markdown
+- explicaciones
+- comentarios
+- texto antes del JSON
+- texto después del JSON
+- bloques de código
 
 La estructura obligatoria es:
 
@@ -189,17 +271,17 @@ La estructura obligatoria es:
   "observaciones": ""
 }
 
-Si hay varias dosis, cultivos o plagas,
-mantén toda la información relevante dentro
-de los campos correspondientes.
+Si existen varias dosis, cultivos, plagas, carencias o mojamiento, conserva toda la información relevante dentro de los campos correspondientes.
 
-INFORMACIÓN ADICIONAL PROPORCIONADA POR LA APLICACIÓN:
+=========================================
+INFORMACIÓN ADICIONAL DE LA APLICACIÓN
+=========================================
 
 ${promptOriginal}
 `;
 
         // =========================================
-        // ENVIAR IMAGEN + BÚSQUEDA WEB A GEMINI
+        // LOG
         // =========================================
 
         console.log("=================================");
@@ -210,6 +292,10 @@ ${promptOriginal}
         console.log("Fuente prioritaria: SAG Chile");
         console.log("=================================");
 
+        // =========================================
+        // GEMINI + GOOGLE SEARCH
+        // =========================================
+
         const result = await ai.models.generateContent({
 
             model: model,
@@ -217,7 +303,6 @@ ${promptOriginal}
             contents: [
                 {
                     role: "user",
-
                     parts: [
                         {
                             text: prompt
@@ -234,19 +319,11 @@ ${promptOriginal}
 
             config: {
 
-                // =====================================
-                // BÚSQUEDA WEB
-                // =====================================
-
                 tools: [
                     {
                         googleSearch: {}
                     }
                 ],
-
-                // =====================================
-                // RESPUESTA JSON
-                // =====================================
 
                 responseMimeType: "application/json"
             }
@@ -274,7 +351,7 @@ ${promptOriginal}
         );
 
         // =========================================
-        // CONVERTIR RESPUESTA A JSON
+        // CONVERTIR A JSON
         // =========================================
 
         let datos;
@@ -300,7 +377,6 @@ ${promptOriginal}
         // =========================================
 
         if (!datos || typeof datos !== "object") {
-
             throw new Error(
                 "Gemini devolvió datos vacíos o inválidos."
             );
@@ -316,7 +392,7 @@ ${promptOriginal}
         );
 
         // =========================================
-        // RESPUESTA PARA IA.JS
+        // RESPUESTA
         // =========================================
 
         return {
@@ -346,13 +422,20 @@ ${promptOriginal}
     } catch (error) {
 
         // =========================================
-        // MANEJO DE ERRORES
+        // ERROR
         // =========================================
 
         console.error(
             "ERROR EN analizarEtiqueta:",
             error
         );
+
+        let mensaje = error.message || "Error desconocido.";
+
+        if (error.status === 429) {
+            mensaje =
+                "Se alcanzó el límite de uso de Gemini. Espera unos minutos o revisa la cuota de la API.";
+        }
 
         return {
 
@@ -367,11 +450,11 @@ ${promptOriginal}
 
                 ok: false,
 
-                mensaje: error.message,
+                mensaje: mensaje,
 
                 proveedor: "Google Gemini",
 
-                modelo: "gemini-3.6-flash"
+                modelo: model
 
             })
         };
