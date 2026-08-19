@@ -2,6 +2,12 @@ const { GoogleGenAI } = require("@google/genai");
 
 const API_KEY = process.env.GEMINI_API_KEY;
 
+// =========================================
+// MODELO GEMINI
+// =========================================
+
+const model = "gemini-3.6-flash";
+
 exports.handler = async (event) => {
 
     // =========================================
@@ -46,8 +52,13 @@ exports.handler = async (event) => {
             throw new Error("No se recibió ninguna imagen.");
         }
 
+        // =========================================
+        // LIMPIAR CABECERA BASE64
+        // =========================================
+
         // Si llega como data:image/jpeg;base64,...
         // eliminamos la cabecera.
+
         if (imageBase64.includes(",")) {
             imageBase64 = imageBase64.split(",")[1];
         }
@@ -59,12 +70,6 @@ exports.handler = async (event) => {
         const ai = new GoogleGenAI({
             apiKey: API_KEY
         });
-
-        // =========================================
-        // MODELO
-        // =========================================
-
-        const model = "gemini-3.6-flash";
 
         // =========================================
         // PROMPT PRINCIPAL
