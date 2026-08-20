@@ -5,14 +5,14 @@ const API_KEY = process.env.GEMINI_API_KEY;
 // =====================================================
 // MODELO
 // =====================================================
-// Gemini 2.5 Flash
+// Gemini 3.5 Flash
 // - Imagen: SI
 // - Google Search: SI
 // - JSON: SI
 // - Disponible en Free Tier
 // =====================================================
 
-const MODELO = "gemini-2.5-flash";
+const MODELO = "gemini-3.5-flash";
 
 exports.handler = async (event) => {
 
