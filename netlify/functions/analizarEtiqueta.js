@@ -1,32 +1,185 @@
 const { GoogleGenAI } = require("@google/genai");
 
+// =====================================================
+// CONFIGURACIÓN
+// =====================================================
+
 const API_KEY = process.env.GEMINI_API_KEY;
 
+// MODELO ÚNICO
+// No usamos 2.5 como respaldo para evitar llamadas
+// adicionales cuando existe un problema de cuota.
+const MODELO = "gemini-3.6-flash";
+
+// Google Search se mantiene activado por defecto.
+// Si alguna vez quieres probar Gemini sin búsqueda,
+// puedes crear en Netlify:
+//
+// GEMINI_USE_SEARCH = false
+//
+// Para BIO IA normalmente debe quedar en true.
+const USAR_GOOGLE_SEARCH =
+    String(process.env.GEMINI_USE_SEARCH || "true").toLowerCase() !== "false";
+
+
 // =====================================================
-// MODELO
-// =====================================================
-// Gemini 3.5 Flash
-// - Imagen: SI
-// - Google Search: SI
-// - JSON: SI
-// - Disponible en Free Tier
+// ESQUEMA JSON
 // =====================================================
 
-const MODELO = "gemini-3.5-flash";
+const RESPONSE_SCHEMA = {
+    type: "object",
+
+    properties: {
+
+        tipo_registro: {
+            type: "string"
+        },
+
+        nombre: {
+            type: "string"
+        },
+
+        funcion: {
+            type: "array",
+            items: {
+                type: "string"
+            }
+        },
+
+        ingrediente_activo: {
+            type: "string"
+        },
+
+        concentracion: {
+            type: "string"
+        },
+
+        formulacion: {
+            type: "string"
+        },
+
+        dosis: {
+            type: "string"
+        },
+
+        unidad_dosis: {
+            type: "string"
+        },
+
+        mojamiento: {
+            type: "string"
+        },
+
+        cultivos: {
+            type: "array",
+            items: {
+                type: "string"
+            }
+        },
+
+        plagas_objetivo: {
+            type: "array",
+            items: {
+                type: "string"
+            }
+        },
+
+        enfermedades: {
+            type: "array",
+            items: {
+                type: "string"
+            }
+        },
+
+        malezas: {
+            type: "array",
+            items: {
+                type: "string"
+            }
+        },
+
+        modo_accion: {
+            type: "array",
+            items: {
+                type: "string"
+            }
+        },
+
+        carencia: {
+            type: "string"
+        },
+
+        reentrada: {
+            type: "string"
+        },
+
+        empresa: {
+            type: "string"
+        },
+
+        registro: {
+            type: "string"
+        },
+
+        contenido: {
+            type: "string"
+        },
+
+        compatibilidad: {
+            type: "string"
+        },
+
+        observaciones: {
+            type: "string"
+        }
+    },
+
+    required: [
+        "tipo_registro",
+        "nombre",
+        "funcion",
+        "ingrediente_activo",
+        "concentracion",
+        "formulacion",
+        "dosis",
+        "unidad_dosis",
+        "mojamiento",
+        "cultivos",
+        "plagas_objetivo",
+        "enfermedades",
+        "malezas",
+        "modo_accion",
+        "carencia",
+        "reentrada",
+        "empresa",
+        "registro",
+        "contenido",
+        "compatibilidad",
+        "observaciones"
+    ]
+};
+
+
+// =====================================================
+// FUNCIÓN PRINCIPAL NETLIFY
+// =====================================================
 
 exports.handler = async (event) => {
 
-    // =====================================================
+    // =================================================
     // MÉTODO HTTP
-    // =====================================================
+    // =================================================
 
     if (event.httpMethod !== "POST") {
+
         return {
             statusCode: 405,
+
             headers: {
                 "Content-Type": "application/json",
                 "Cache-Control": "no-store"
             },
+
             body: JSON.stringify({
                 ok: false,
                 mensaje: "Método no permitido."
@@ -34,43 +187,62 @@ exports.handler = async (event) => {
         };
     }
 
+
     try {
 
-        // =====================================================
+        // =================================================
         // VERIFICAR API KEY
-        // =====================================================
+        // =================================================
 
         if (!API_KEY) {
+
+            console.error(
+                "ERROR: GEMINI_API_KEY no está configurada."
+            );
+
             return {
                 statusCode: 500,
+
                 headers: {
                     "Content-Type": "application/json",
                     "Cache-Control": "no-store"
                 },
+
                 body: JSON.stringify({
                     ok: false,
                     mensaje:
-                        "No está configurada la variable GEMINI_API_KEY en Netlify."
+                        "No está configurada la variable GEMINI_API_KEY en Netlify.",
+                    proveedor: "Google Gemini",
+                    modelo: MODELO
                 })
             };
         }
 
-        // =====================================================
+
+        // =================================================
         // LEER BODY
-        // =====================================================
+        // =================================================
 
         let body;
 
         try {
+
             body = JSON.parse(event.body || "{}");
+
         } catch (error) {
+
+            console.error(
+                "ERROR: Body no contiene JSON válido."
+            );
 
             return {
                 statusCode: 400,
+
                 headers: {
                     "Content-Type": "application/json",
                     "Cache-Control": "no-store"
                 },
+
                 body: JSON.stringify({
                     ok: false,
                     mensaje:
@@ -79,25 +251,35 @@ exports.handler = async (event) => {
             };
         }
 
-        // =====================================================
+
+        // =================================================
         // OBTENER IMAGEN
-        // =====================================================
+        // =================================================
 
         let imageBase64 =
             body.image ||
-            body.imageBase64;
+            body.imageBase64 ||
+            "";
 
         const promptOriginal =
-            body.prompt || "";
+            body.prompt ||
+            "";
+
+
+        // =================================================
+        // VERIFICAR IMAGEN
+        // =================================================
 
         if (!imageBase64) {
 
             return {
                 statusCode: 400,
+
                 headers: {
                     "Content-Type": "application/json",
                     "Cache-Control": "no-store"
                 },
+
                 body: JSON.stringify({
                     ok: false,
                     mensaje:
@@ -106,52 +288,104 @@ exports.handler = async (event) => {
             };
         }
 
-        // =====================================================
+
+        // =================================================
+        // IDENTIFICAR MIME TYPE
+        // =================================================
+
+        let mimeType = "image/jpeg";
+
+        if (
+            typeof imageBase64 === "string" &&
+            imageBase64.startsWith("data:")
+        ) {
+
+            const match =
+                imageBase64.match(/^data:([^;]+);base64,/);
+
+            if (match && match[1]) {
+                mimeType = match[1];
+            }
+        }
+
+
+        // =================================================
         // LIMPIAR DATA URL
-        // =====================================================
+        // =================================================
 
         if (
             typeof imageBase64 === "string" &&
             imageBase64.includes(",")
         ) {
+
             imageBase64 =
                 imageBase64.split(",")[1];
         }
 
-        console.log("=================================");
-        console.log("INICIO analizarEtiqueta");
-        console.log("=================================");
+
+        // =================================================
+        // INFORMACIÓN DE DIAGNÓSTICO
+        // =================================================
+
         console.log(
-            "Imagen recibida:",
-            imageBase64 ? "SI" : "NO"
+            "================================="
         );
+
+        console.log(
+            "INICIO analizarEtiqueta"
+        );
+
+        console.log(
+            "================================="
+        );
+
+        console.log(
+            "Imagen recibida: SI"
+        );
+
+        console.log(
+            "Tipo imagen:",
+            mimeType
+        );
+
         console.log(
             "Tamaño Base64:",
             imageBase64.length
         );
+
         console.log(
             "Modelo:",
             MODELO
         );
+
         console.log(
-            "Google Search: ACTIVADO"
+            "Google Search:",
+            USAR_GOOGLE_SEARCH
+                ? "ACTIVADO"
+                : "DESACTIVADO"
         );
+
         console.log(
             "Fuente prioritaria: SAG Chile"
         );
-        console.log("=================================");
 
-        // =====================================================
+        console.log(
+            "================================="
+        );
+
+
+        // =================================================
         // CLIENTE GEMINI
-        // =====================================================
+        // =================================================
 
         const ai = new GoogleGenAI({
             apiKey: API_KEY
         });
 
-        // =====================================================
+
+        // =================================================
         // PROMPT PRINCIPAL
-        // =====================================================
+        // =================================================
 
         const prompt = `
 Eres BIO IA, un asistente especializado en productos
@@ -175,14 +409,17 @@ Identifica, si es posible:
 - número de registro SAG
 - contenido
 
+
 =========================================
 ETAPA 2 — INVESTIGAR EL PRODUCTO
 =========================================
 
-Una vez identificado el producto, utiliza Google Search
-para buscar información técnica y regulatoria actualizada.
+Una vez identificado el producto, investiga mediante
+Google Search para obtener información técnica y
+regulatoria actualizada.
 
-Para productos fitosanitarios en Chile utiliza esta prioridad:
+Para productos fitosanitarios en Chile, utiliza esta
+prioridad:
 
 1. SAG Chile
 2. Registro oficial SAG
@@ -194,7 +431,9 @@ No utilices una página comercial como fuente principal
 si existe información oficial del SAG.
 
 Si existen diferencias entre fuentes, prioriza la
-información oficial chilena correspondiente al registro SAG.
+información oficial chilena correspondiente al
+registro SAG.
+
 
 =========================================
 DATOS A INVESTIGAR
@@ -214,6 +453,7 @@ Debes intentar completar:
 - horas de reentrada
 - compatibilidad
 - observaciones
+
 
 =========================================
 DOSIS Y MOJAMIENTO
@@ -235,8 +475,9 @@ Debes identificar:
 NO entregues una dosis genérica si existen diferentes
 dosis según cultivo o plaga.
 
-Si existen varias combinaciones, conserva toda
-la información relevante.
+Si existen varias combinaciones, conserva TODAS
+las combinaciones relevantes.
+
 
 =========================================
 MODO DE ACCIÓN
@@ -254,6 +495,7 @@ Si corresponde, incluye:
 
 NO inventes clasificaciones.
 
+
 =========================================
 CARENCIA
 =========================================
@@ -261,6 +503,7 @@ CARENCIA
 Busca específicamente el período de carencia.
 
 Si cambia según cultivo, conserva cada valor.
+
 
 =========================================
 REENTRADA
@@ -270,58 +513,56 @@ Busca específicamente el período de reentrada o reingreso.
 
 NO confundas carencia con reentrada.
 
+
 =========================================
 REGLA FUNDAMENTAL
 =========================================
 
 NO INVENTES NINGÚN DATO.
 
-Si después de buscar no encuentras información confiable,
-escribe exactamente:
+Si después de buscar no encuentras información
+confiable, escribe exactamente:
 
 "No encontrado"
 
+
 =========================================
-FORMATO DE RESPUESTA
+IMPORTANTE
 =========================================
 
-Devuelve EXCLUSIVAMENTE JSON válido.
+La información debe corresponder al producto
+identificado en la fotografía.
 
-NO utilices Markdown.
+Busca preferentemente por:
 
-NO utilices bloques de código.
+- nombre comercial
+- ingrediente activo
+- número de registro SAG
+- fabricante
 
-NO agregues explicaciones fuera del JSON.
+Cuando exista una etiqueta oficial SAG, dale
+prioridad sobre páginas comerciales.
 
-La estructura obligatoria es:
 
-{
-  "tipo_registro": "",
-  "nombre": "",
-  "funcion": [],
-  "ingrediente_activo": "",
-  "concentracion": "",
-  "formulacion": "",
-  "dosis": "",
-  "unidad_dosis": "",
-  "mojamiento": "",
-  "cultivos": [],
-  "plagas_objetivo": [],
-  "enfermedades": [],
-  "malezas": [],
-  "modo_accion": [],
-  "carencia": "",
-  "reentrada": "",
-  "empresa": "",
-  "registro": "",
-  "contenido": "",
-  "compatibilidad": "",
-  "observaciones": ""
-}
+=========================================
+FORMATO
+=========================================
 
-Si hay varias dosis, cultivos o plagas,
-conserva toda la información relevante dentro
-de los campos correspondientes.
+Devuelve exclusivamente un objeto JSON válido.
+
+No utilices Markdown.
+
+No utilices bloques de código.
+
+No agregues explicaciones fuera del JSON.
+
+Todos los campos deben existir.
+
+Si un dato no puede encontrarse de forma confiable,
+utiliza:
+
+"No encontrado"
+
 
 =========================================
 INFORMACIÓN ADICIONAL DE LA APLICACIÓN
@@ -330,24 +571,70 @@ INFORMACIÓN ADICIONAL DE LA APLICACIÓN
 ${promptOriginal}
 `;
 
-        // =====================================================
-        // LLAMADA A GEMINI
-        // =====================================================
+
+        // =================================================
+        // CONFIGURACIÓN DE GEMINI
+        // =================================================
+
+        const config = {
+
+            responseMimeType:
+                "application/json",
+
+            responseSchema:
+                RESPONSE_SCHEMA
+        };
+
+
+        // =================================================
+        // GOOGLE SEARCH
+        // =================================================
+
+        if (USAR_GOOGLE_SEARCH) {
+
+            config.tools = [
+                {
+                    googleSearch: {}
+                }
+            ];
+        }
+
+
+        // =================================================
+        // LLAMADA ÚNICA A GEMINI
+        // =================================================
 
         let result;
 
+        const inicio =
+            Date.now();
+
         try {
 
-            console.log("=================================");
-            console.log("ENVIANDO SOLICITUD A GEMINI");
-            console.log("=================================");
+            console.log(
+                "---------------------------------"
+            );
+
+            console.log(
+                "Enviando solicitud a Gemini..."
+            );
+
             console.log(
                 "Modelo:",
                 MODELO
             );
+
             console.log(
-                "Google Search: ACTIVADO"
+                "Google Search:",
+                USAR_GOOGLE_SEARCH
+                    ? "ACTIVADO"
+                    : "DESACTIVADO"
             );
+
+            console.log(
+                "---------------------------------"
+            );
+
 
             result =
                 await ai.models.generateContent({
@@ -355,6 +642,7 @@ ${promptOriginal}
                     model: MODELO,
 
                     contents: [
+
                         {
                             role: "user",
 
@@ -367,7 +655,7 @@ ${promptOriginal}
                                 {
                                     inlineData: {
                                         mimeType:
-                                            "image/jpeg",
+                                            mimeType,
                                         data:
                                             imageBase64
                                     }
@@ -375,56 +663,31 @@ ${promptOriginal}
 
                             ]
                         }
+
                     ],
 
-                    config: {
-
-                        tools: [
-                            {
-                                googleSearch: {}
-                            }
-                        ],
-
-                        responseMimeType:
-                            "application/json"
-                    }
+                    config: config
                 });
 
+
+            const duracion =
+                Date.now() - inicio;
+
             console.log(
-                "================================="
+                "Gemini respondió correctamente."
             );
 
             console.log(
-                "GEMINI RESPONDIÓ CORRECTAMENTE"
+                "Duración:",
+                duracion,
+                "ms"
             );
 
-            console.log(
-                "================================="
-            );
-
-            // =================================================
-            // REGISTRO DE CONSUMO
-            // =================================================
-
-            if (result.usageMetadata) {
-
-                console.log(
-                    "Tokens entrada:",
-                    result.usageMetadata.promptTokenCount || 0
-                );
-
-                console.log(
-                    "Tokens salida:",
-                    result.usageMetadata.candidatesTokenCount || 0
-                );
-
-                console.log(
-                    "Tokens totales:",
-                    result.usageMetadata.totalTokenCount || 0
-                );
-            }
 
         } catch (errorGemini) {
+
+            const duracion =
+                Date.now() - inicio;
 
             console.error(
                 "================================="
@@ -439,32 +702,66 @@ ${promptOriginal}
             );
 
             console.error(
+                "Modelo:",
+                MODELO
+            );
+
+            console.error(
+                "Duración:",
+                duracion,
+                "ms"
+            );
+
+            console.error(
                 errorGemini
             );
+
 
             const mensaje =
                 errorGemini?.message ||
                 String(errorGemini);
 
-            const status =
-                errorGemini?.status ||
-                errorGemini?.code ||
-                "";
 
-            // =================================================
+            const status =
+                Number(
+                    errorGemini?.status ||
+                    errorGemini?.code ||
+                    0
+                );
+
+
+            // =============================================
             // ERROR 429 — CUOTA
-            // =================================================
+            // =============================================
 
             if (
+
                 status === 429 ||
+
                 mensaje.includes("429") ||
-                mensaje.includes("RESOURCE_EXHAUSTED") ||
-                mensaje.toLowerCase().includes("quota")
+
+                mensaje.includes(
+                    "RESOURCE_EXHAUSTED"
+                ) ||
+
+                mensaje
+                    .toLowerCase()
+                    .includes("quota")
+
             ) {
+
+                console.error(
+                    "================================="
+                );
 
                 console.error(
                     "CUOTA GEMINI AGOTADA"
                 );
+
+                console.error(
+                    "================================="
+                );
+
 
                 return {
                     statusCode: 429,
@@ -482,7 +779,9 @@ ${promptOriginal}
                         ok: false,
 
                         mensaje:
-                            "Gemini rechazó la solicitud por límite de cuota.",
+                            "Gemini rechazó la solicitud por límite de cuota. " +
+                            "El código de la aplicación está funcionando, " +
+                            "pero la API de Google no permitió esta solicitud.",
 
                         proveedor:
                             "Google Gemini",
@@ -499,16 +798,32 @@ ${promptOriginal}
                 };
             }
 
-            // =================================================
-            // ERROR 404 — MODELO
-            // =================================================
+
+            // =============================================
+            // ERROR 404 — MODELO NO DISPONIBLE
+            // =============================================
 
             if (
+
                 status === 404 ||
+
                 mensaje.includes("404") ||
-                mensaje.includes("NOT_FOUND") ||
-                mensaje.toLowerCase().includes("not found")
+
+                mensaje.includes(
+                    "NOT_FOUND"
+                ) ||
+
+                mensaje
+                    .toLowerCase()
+                    .includes("not found")
+
             ) {
+
+                console.error(
+                    "MODELO NO DISPONIBLE:",
+                    MODELO
+                );
+
 
                 return {
                     statusCode: 502,
@@ -526,7 +841,7 @@ ${promptOriginal}
                         ok: false,
 
                         mensaje:
-                            "El modelo de Gemini no está disponible para esta API.",
+                            "El modelo Gemini 3.6 Flash no está disponible para esta API o proyecto.",
 
                         proveedor:
                             "Google Gemini",
@@ -543,9 +858,50 @@ ${promptOriginal}
                 };
             }
 
-            // =================================================
-            // OTRO ERROR DE GEMINI
-            // =================================================
+
+            // =============================================
+            // ERROR 400
+            // =============================================
+
+            if (status === 400) {
+
+                return {
+                    statusCode: 502,
+
+                    headers: {
+                        "Content-Type":
+                            "application/json",
+
+                        "Cache-Control":
+                            "no-store"
+                    },
+
+                    body: JSON.stringify({
+
+                        ok: false,
+
+                        mensaje:
+                            "Gemini rechazó la solicitud por parámetros no válidos.",
+
+                        proveedor:
+                            "Google Gemini",
+
+                        modelo:
+                            MODELO,
+
+                        codigo:
+                            400,
+
+                        detalle:
+                            mensaje
+                    })
+                };
+            }
+
+
+            // =============================================
+            // ERROR GENERAL GEMINI
+            // =============================================
 
             return {
                 statusCode: 500,
@@ -571,25 +927,35 @@ ${promptOriginal}
                     modelo:
                         MODELO,
 
+                    codigo:
+                        status || 500,
+
                     detalle:
                         mensaje
                 })
             };
         }
 
-        // =====================================================
-        // OBTENER RESPUESTA
-        // =====================================================
 
-        let texto =
+        // =================================================
+        // OBTENER TEXTO
+        // =================================================
+
+        const texto =
             result?.text;
 
+
         if (!texto) {
+
+            console.error(
+                "Gemini no devolvió texto."
+            );
 
             throw new Error(
                 "Gemini no devolvió ninguna respuesta."
             );
         }
+
 
         console.log(
             "================================="
@@ -600,35 +966,23 @@ ${promptOriginal}
         );
 
         console.log(
+            "Modelo:",
+            MODELO
+        );
+
+        console.log(
             "================================="
         );
+
 
         console.log(
             texto
         );
 
-        // =====================================================
-        // LIMPIAR POSIBLE MARKDOWN
-        // =====================================================
 
-        texto =
-            texto.trim();
-
-        if (
-            texto.startsWith("```") &&
-            texto.endsWith("```")
-        ) {
-
-            texto =
-                texto
-                    .replace(/^```[a-zA-Z]*\s*/, "")
-                    .replace(/\s*```$/, "")
-                    .trim();
-        }
-
-        // =====================================================
-        // CONVERTIR RESPUESTA A JSON
-        // =====================================================
+        // =================================================
+        // CONVERTIR JSON
+        // =================================================
 
         let datos;
 
@@ -640,15 +994,7 @@ ${promptOriginal}
         } catch (errorJSON) {
 
             console.error(
-                "================================="
-            );
-
-            console.error(
                 "ERROR CONVIRTIENDO RESPUESTA A JSON"
-            );
-
-            console.error(
-                "================================="
             );
 
             console.error(
@@ -660,20 +1006,101 @@ ${promptOriginal}
             );
         }
 
-        // =====================================================
-        // VALIDAR JSON
-        // =====================================================
+
+        // =================================================
+        // VALIDAR OBJETO
+        // =================================================
 
         if (
+
             !datos ||
+
             typeof datos !== "object" ||
+
             Array.isArray(datos)
+
         ) {
 
             throw new Error(
                 "Gemini devolvió datos vacíos o inválidos."
             );
         }
+
+
+        // =================================================
+        // ASEGURAR CAMPOS
+        // =================================================
+
+        const camposString = [
+
+            "tipo_registro",
+            "nombre",
+            "ingrediente_activo",
+            "concentracion",
+            "formulacion",
+            "dosis",
+            "unidad_dosis",
+            "mojamiento",
+            "carencia",
+            "reentrada",
+            "empresa",
+            "registro",
+            "contenido",
+            "compatibilidad",
+            "observaciones"
+
+        ];
+
+
+        const camposArray = [
+
+            "funcion",
+            "cultivos",
+            "plagas_objetivo",
+            "enfermedades",
+            "malezas",
+            "modo_accion"
+
+        ];
+
+
+        for (const campo of camposString) {
+
+            if (
+                typeof datos[campo] !== "string"
+            ) {
+
+                datos[campo] =
+                    datos[campo] == null
+                        ? "No encontrado"
+                        : String(datos[campo]);
+            }
+        }
+
+
+        for (const campo of camposArray) {
+
+            if (!Array.isArray(datos[campo])) {
+
+                if (
+                    datos[campo] == null ||
+                    datos[campo] === ""
+                ) {
+
+                    datos[campo] = [];
+
+                } else {
+
+                    datos[campo] =
+                        [String(datos[campo])];
+                }
+            }
+        }
+
+
+        // =================================================
+        // LOG FINAL
+        // =================================================
 
         console.log(
             "================================="
@@ -691,9 +1118,10 @@ ${promptOriginal}
             JSON.stringify(datos)
         );
 
-        // =====================================================
+
+        // =================================================
         // RESPUESTA EXITOSA
-        // =====================================================
+        // =================================================
 
         return {
 
@@ -726,18 +1154,19 @@ ${promptOriginal}
             })
         };
 
+
     } catch (error) {
 
-        // =====================================================
+        // =================================================
         // ERROR GENERAL
-        // =====================================================
+        // =================================================
 
         console.error(
             "================================="
         );
 
         console.error(
-            "ERROR EN analizarEtiqueta"
+            "ERROR GENERAL EN analizarEtiqueta"
         );
 
         console.error(
@@ -748,9 +1177,11 @@ ${promptOriginal}
             error
         );
 
+
         const mensaje =
             error?.message ||
             String(error);
+
 
         return {
 
