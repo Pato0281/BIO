@@ -16,10 +16,11 @@ export const firebaseConfig = {
 export const NETLIFY_FUNCTION_URL =
     "/.netlify/functions/analizarEtiqueta";
 
+// ---------- Configuración IA ----------
 export const IA_CONFIG = {
     API_URL: NETLIFY_FUNCTION_URL,
     ENGINE_VERSION: "BIO-IA-V3",
-    PROVIDER: "Gemini",
+    PROVIDER: "OpenRouter",
     temperatura: 0.2,
     maxTokens: 2048
 };
