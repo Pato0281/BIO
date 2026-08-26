@@ -1,26 +1,32 @@
-const { GoogleGenAI } = require("@google/genai");
+const API_KEY = process.env.OPENROUTER_API_KEY;
+const API_URL = "https://openrouter.ai/api/v1/chat/completions";
+const MODELO = "openrouter/free";
 
-// =====================================================
-// CONFIGURACIÓN
-// =====================================================
-
-const API_KEY = process.env.GEMINI_API_KEY;
-
-// MODELO ÚNICO
-// No usamos 2.5 como respaldo para evitar llamadas
-// adicionales cuando existe un problema de cuota.
-const MODELO = "gemini-3.6-flash";
-
-// Google Search se mantiene activado por defecto.
-// Si alguna vez quieres probar Gemini sin búsqueda,
-// puedes crear en Netlify:
-//
-// GEMINI_USE_SEARCH = false
-//
-// Para BIO IA normalmente debe quedar en true.
-const USAR_GOOGLE_SEARCH =
-    String(process.env.GEMINI_USE_SEARCH || "true").toLowerCase() !== "false";
-
+/*
+ * =====================================================
+ * BIO IA - analizarEtiqueta.js V2
+ * =====================================================
+ *
+ * Migración:
+ *
+ * ANTES:
+ * Google Gemini
+ *
+ * AHORA:
+ * OpenRouter
+ *
+ * Esta V2 mantiene:
+ * - recepción de imagen Base64
+ * - prompt de BIO IA
+ * - estructura JSON
+ * - validación de campos
+ * - respuesta compatible con la aplicación
+ *
+ * TEMPORALMENTE:
+ * Google Search / SAG NO está activo.
+ *
+ * La búsqueda oficial SAG se incorporará posteriormente.
+ */
 
 // =====================================================
 // ESQUEMA JSON
@@ -28,6 +34,7 @@ const USAR_GOOGLE_SEARCH =
 
 const RESPONSE_SCHEMA = {
     type: "object",
+    additionalProperties: false,
 
     properties: {
 
@@ -172,19 +179,11 @@ exports.handler = async (event) => {
 
     if (event.httpMethod !== "POST") {
 
-        return {
-            statusCode: 405,
+        return json(405, {
+            ok: false,
+            mensaje: "Método no permitido."
+        });
 
-            headers: {
-                "Content-Type": "application/json",
-                "Cache-Control": "no-store"
-            },
-
-            body: JSON.stringify({
-                ok: false,
-                mensaje: "Método no permitido."
-            })
-        };
     }
 
 
@@ -197,25 +196,24 @@ exports.handler = async (event) => {
         if (!API_KEY) {
 
             console.error(
-                "ERROR: GEMINI_API_KEY no está configurada."
+                "ERROR: OPENROUTER_API_KEY no está configurada."
             );
 
-            return {
-                statusCode: 500,
+            return json(500, {
 
-                headers: {
-                    "Content-Type": "application/json",
-                    "Cache-Control": "no-store"
-                },
+                ok: false,
 
-                body: JSON.stringify({
-                    ok: false,
-                    mensaje:
-                        "No está configurada la variable GEMINI_API_KEY en Netlify.",
-                    proveedor: "Google Gemini",
-                    modelo: MODELO
-                })
-            };
+                mensaje:
+                    "No está configurada la variable OPENROUTER_API_KEY en Netlify.",
+
+                proveedor:
+                    "OpenRouter",
+
+                modelo:
+                    MODELO
+
+            });
+
         }
 
 
@@ -227,7 +225,10 @@ exports.handler = async (event) => {
 
         try {
 
-            body = JSON.parse(event.body || "{}");
+            body =
+                JSON.parse(
+                    event.body || "{}"
+                );
 
         } catch (error) {
 
@@ -235,20 +236,15 @@ exports.handler = async (event) => {
                 "ERROR: Body no contiene JSON válido."
             );
 
-            return {
-                statusCode: 400,
+            return json(400, {
 
-                headers: {
-                    "Content-Type": "application/json",
-                    "Cache-Control": "no-store"
-                },
+                ok: false,
 
-                body: JSON.stringify({
-                    ok: false,
-                    mensaje:
-                        "El cuerpo de la solicitud no es JSON válido."
-                })
-            };
+                mensaje:
+                    "El cuerpo de la solicitud no es JSON válido."
+
+            });
+
         }
 
 
@@ -272,20 +268,15 @@ exports.handler = async (event) => {
 
         if (!imageBase64) {
 
-            return {
-                statusCode: 400,
+            return json(400, {
 
-                headers: {
-                    "Content-Type": "application/json",
-                    "Cache-Control": "no-store"
-                },
+                ok: false,
 
-                body: JSON.stringify({
-                    ok: false,
-                    mensaje:
-                        "No se recibió ninguna imagen."
-                })
-            };
+                mensaje:
+                    "No se recibió ninguna imagen."
+
+            });
+
         }
 
 
@@ -293,7 +284,9 @@ exports.handler = async (event) => {
         // IDENTIFICAR MIME TYPE
         // =================================================
 
-        let mimeType = "image/jpeg";
+        let mimeType =
+            "image/jpeg";
+
 
         if (
             typeof imageBase64 === "string" &&
@@ -301,11 +294,20 @@ exports.handler = async (event) => {
         ) {
 
             const match =
-                imageBase64.match(/^data:([^;]+);base64,/);
+                imageBase64.match(
+                    /^data:([^;]+);base64,/
+                );
 
-            if (match && match[1]) {
-                mimeType = match[1];
+            if (
+                match &&
+                match[1]
+            ) {
+
+                mimeType =
+                    match[1];
+
             }
+
         }
 
 
@@ -320,11 +322,32 @@ exports.handler = async (event) => {
 
             imageBase64 =
                 imageBase64.split(",")[1];
+
         }
 
 
         // =================================================
-        // INFORMACIÓN DE DIAGNÓSTICO
+        // VALIDAR MIME TYPE
+        // =================================================
+
+        if (
+            !mimeType.startsWith("image/")
+        ) {
+
+            return json(400, {
+
+                ok: false,
+
+                mensaje:
+                    `Tipo de imagen no soportado: ${mimeType}`
+
+            });
+
+        }
+
+
+        // =================================================
+        // LOG DIAGNÓSTICO
         // =================================================
 
         console.log(
@@ -332,7 +355,7 @@ exports.handler = async (event) => {
         );
 
         console.log(
-            "INICIO analizarEtiqueta"
+            "INICIO analizarEtiqueta V2"
         );
 
         console.log(
@@ -354,33 +377,28 @@ exports.handler = async (event) => {
         );
 
         console.log(
+            "Proveedor:",
+            "OpenRouter"
+        );
+
+        console.log(
             "Modelo:",
             MODELO
         );
 
         console.log(
             "Google Search:",
-            USAR_GOOGLE_SEARCH
-                ? "ACTIVADO"
-                : "DESACTIVADO"
+            "DESACTIVADO"
         );
 
         console.log(
-            "Fuente prioritaria: SAG Chile"
+            "SAG/Web:",
+            "DESACTIVADO EN V2"
         );
 
         console.log(
             "================================="
         );
-
-
-        // =================================================
-        // CLIENTE GEMINI
-        // =================================================
-
-        const ai = new GoogleGenAI({
-            apiKey: API_KEY
-        });
 
 
         // =================================================
@@ -411,35 +429,33 @@ Identifica, si es posible:
 
 
 =========================================
-ETAPA 2 — INVESTIGAR EL PRODUCTO
+ETAPA 2 — INFORMACIÓN TÉCNICA
 =========================================
 
-Una vez identificado el producto, investiga mediante
-Google Search para obtener información técnica y
-regulatoria actualizada.
+En esta versión NO tienes acceso a Google Search
+ni a navegación web.
 
-Para productos fitosanitarios en Chile, utiliza esta
-prioridad:
+Por lo tanto:
 
-1. SAG Chile
-2. Registro oficial SAG
-3. Etiqueta oficial registrada en Chile
-4. Fabricante oficial
-5. Documentación técnica confiable
+- utiliza solamente información visible en la imagen
+- no inventes información
+- no supongas dosis
+- no supongas cultivos
+- no supongas plagas
+- no supongas carencia
+- no supongas reentrada
 
-No utilices una página comercial como fuente principal
-si existe información oficial del SAG.
+Cuando un dato no pueda determinarse de forma confiable
+a partir de la imagen, utiliza exactamente:
 
-Si existen diferencias entre fuentes, prioriza la
-información oficial chilena correspondiente al
-registro SAG.
+"No encontrado"
 
 
 =========================================
-DATOS A INVESTIGAR
+DATOS A IDENTIFICAR
 =========================================
 
-Debes intentar completar:
+Intenta completar:
 
 - dosis
 - unidad de dosis
@@ -459,9 +475,9 @@ Debes intentar completar:
 DOSIS Y MOJAMIENTO
 =========================================
 
-Busca específicamente las tablas oficiales de aplicación.
+Si la etiqueta contiene tablas:
 
-Debes identificar:
+identifica:
 
 - cultivo
 - plaga
@@ -472,26 +488,27 @@ Debes identificar:
 - número de aplicaciones
 - intervalo entre aplicaciones
 
-NO entregues una dosis genérica si existen diferentes
-dosis según cultivo o plaga.
+NO entregues una dosis genérica.
 
-Si existen varias combinaciones, conserva TODAS
-las combinaciones relevantes.
+Si aparecen diferentes combinaciones,
+conserva todas las combinaciones relevantes.
 
 
 =========================================
 MODO DE ACCIÓN
 =========================================
 
-Identifica el mecanismo de acción oficial.
+Identifica el mecanismo solamente si existe evidencia
+suficiente en la imagen.
 
-Si corresponde, incluye:
+Si aparecen:
 
-- mecanismo
 - IRAC
 - FRAC
 - HRAC
-- otra clasificación oficial
+- otra clasificación
+
+consérvalos.
 
 NO inventes clasificaciones.
 
@@ -502,14 +519,16 @@ CARENCIA
 
 Busca específicamente el período de carencia.
 
-Si cambia según cultivo, conserva cada valor.
+Si cambia según cultivo,
+conserva cada valor visible.
 
 
 =========================================
 REENTRADA
 =========================================
 
-Busca específicamente el período de reentrada o reingreso.
+Busca específicamente el período de reentrada
+o reingreso.
 
 NO confundas carencia con reentrada.
 
@@ -520,35 +539,17 @@ REGLA FUNDAMENTAL
 
 NO INVENTES NINGÚN DATO.
 
-Si después de buscar no encuentras información
-confiable, escribe exactamente:
+Si un dato no puede encontrarse
+de forma confiable en la imagen:
 
 "No encontrado"
-
-
-=========================================
-IMPORTANTE
-=========================================
-
-La información debe corresponder al producto
-identificado en la fotografía.
-
-Busca preferentemente por:
-
-- nombre comercial
-- ingrediente activo
-- número de registro SAG
-- fabricante
-
-Cuando exista una etiqueta oficial SAG, dale
-prioridad sobre páginas comerciales.
 
 
 =========================================
 FORMATO
 =========================================
 
-Devuelve exclusivamente un objeto JSON válido.
+Devuelve EXCLUSIVAMENTE JSON válido.
 
 No utilices Markdown.
 
@@ -558,10 +559,17 @@ No agregues explicaciones fuera del JSON.
 
 Todos los campos deben existir.
 
-Si un dato no puede encontrarse de forma confiable,
-utiliza:
+Los campos de texto deben contener:
 
 "No encontrado"
+
+cuando no exista evidencia suficiente.
+
+Los campos de tipo array deben utilizar:
+
+[]
+
+cuando no exista información suficiente.
 
 
 =========================================
@@ -573,396 +581,94 @@ ${promptOriginal}
 
 
         // =================================================
-        // CONFIGURACIÓN DE GEMINI
+        // PAYLOAD OPENROUTER
         // =================================================
 
-        const config = {
+        const payload = {
 
-            responseMimeType:
-                "application/json",
+            model:
+                MODELO,
 
-            responseSchema:
-                RESPONSE_SCHEMA
+
+            messages: [
+
+                {
+                    role:
+                        "user",
+
+                    content: [
+
+                        {
+                            type:
+                                "text",
+
+                            text:
+                                prompt
+                        },
+
+                        {
+                            type:
+                                "image_url",
+
+                            image_url: {
+
+                                url:
+                                    `data:${mimeType};base64,${imageBase64}`
+
+                            }
+
+                        }
+
+                    ]
+
+                }
+
+            ],
+
+
+            // Solamente endpoints compatibles
+            provider: {
+
+                require_parameters:
+                    true
+
+            },
+
+
+            // JSON estructurado
+            response_format: {
+
+                type:
+                    "json_schema",
+
+                json_schema: {
+
+                    name:
+                        "bio_ia_respuesta",
+
+                    strict:
+                        true,
+
+                    schema:
+                        RESPONSE_SCHEMA
+
+                }
+
+            }
+
         };
 
 
         // =================================================
-        // GOOGLE SEARCH
+        // LLAMADA A OPENROUTER
         // =================================================
-
-        if (USAR_GOOGLE_SEARCH) {
-
-            config.tools = [
-                {
-                    googleSearch: {}
-                }
-            ];
-        }
-
-
-        // =================================================
-        // LLAMADA ÚNICA A GEMINI
-        // =================================================
-
-        let result;
-
-        const inicio =
-            Date.now();
-
-        try {
-
-            console.log(
-                "---------------------------------"
-            );
-
-            console.log(
-                "Enviando solicitud a Gemini..."
-            );
-
-            console.log(
-                "Modelo:",
-                MODELO
-            );
-
-            console.log(
-                "Google Search:",
-                USAR_GOOGLE_SEARCH
-                    ? "ACTIVADO"
-                    : "DESACTIVADO"
-            );
-
-            console.log(
-                "---------------------------------"
-            );
-
-
-            result =
-                await ai.models.generateContent({
-
-                    model: MODELO,
-
-                    contents: [
-
-                        {
-                            role: "user",
-
-                            parts: [
-
-                                {
-                                    text: prompt
-                                },
-
-                                {
-                                    inlineData: {
-                                        mimeType:
-                                            mimeType,
-                                        data:
-                                            imageBase64
-                                    }
-                                }
-
-                            ]
-                        }
-
-                    ],
-
-                    config: config
-                });
-
-
-            const duracion =
-                Date.now() - inicio;
-
-            console.log(
-                "Gemini respondió correctamente."
-            );
-
-            console.log(
-                "Duración:",
-                duracion,
-                "ms"
-            );
-
-
-        } catch (errorGemini) {
-
-            const duracion =
-                Date.now() - inicio;
-
-            console.error(
-                "================================="
-            );
-
-            console.error(
-                "ERROR GEMINI"
-            );
-
-            console.error(
-                "================================="
-            );
-
-            console.error(
-                "Modelo:",
-                MODELO
-            );
-
-            console.error(
-                "Duración:",
-                duracion,
-                "ms"
-            );
-
-            console.error(
-                errorGemini
-            );
-
-
-            const mensaje =
-                errorGemini?.message ||
-                String(errorGemini);
-
-
-            const status =
-                Number(
-                    errorGemini?.status ||
-                    errorGemini?.code ||
-                    0
-                );
-
-
-            // =============================================
-            // ERROR 429 — CUOTA
-            // =============================================
-
-            if (
-
-                status === 429 ||
-
-                mensaje.includes("429") ||
-
-                mensaje.includes(
-                    "RESOURCE_EXHAUSTED"
-                ) ||
-
-                mensaje
-                    .toLowerCase()
-                    .includes("quota")
-
-            ) {
-
-                console.error(
-                    "================================="
-                );
-
-                console.error(
-                    "CUOTA GEMINI AGOTADA"
-                );
-
-                console.error(
-                    "================================="
-                );
-
-
-                return {
-                    statusCode: 429,
-
-                    headers: {
-                        "Content-Type":
-                            "application/json",
-
-                        "Cache-Control":
-                            "no-store"
-                    },
-
-                    body: JSON.stringify({
-
-                        ok: false,
-
-                        mensaje:
-                            "Gemini rechazó la solicitud por límite de cuota. " +
-                            "El código de la aplicación está funcionando, " +
-                            "pero la API de Google no permitió esta solicitud.",
-
-                        proveedor:
-                            "Google Gemini",
-
-                        modelo:
-                            MODELO,
-
-                        codigo:
-                            429,
-
-                        detalle:
-                            mensaje
-                    })
-                };
-            }
-
-
-            // =============================================
-            // ERROR 404 — MODELO NO DISPONIBLE
-            // =============================================
-
-            if (
-
-                status === 404 ||
-
-                mensaje.includes("404") ||
-
-                mensaje.includes(
-                    "NOT_FOUND"
-                ) ||
-
-                mensaje
-                    .toLowerCase()
-                    .includes("not found")
-
-            ) {
-
-                console.error(
-                    "MODELO NO DISPONIBLE:",
-                    MODELO
-                );
-
-
-                return {
-                    statusCode: 502,
-
-                    headers: {
-                        "Content-Type":
-                            "application/json",
-
-                        "Cache-Control":
-                            "no-store"
-                    },
-
-                    body: JSON.stringify({
-
-                        ok: false,
-
-                        mensaje:
-                            "El modelo Gemini 3.6 Flash no está disponible para esta API o proyecto.",
-
-                        proveedor:
-                            "Google Gemini",
-
-                        modelo:
-                            MODELO,
-
-                        codigo:
-                            404,
-
-                        detalle:
-                            mensaje
-                    })
-                };
-            }
-
-
-            // =============================================
-            // ERROR 400
-            // =============================================
-
-            if (status === 400) {
-
-                return {
-                    statusCode: 502,
-
-                    headers: {
-                        "Content-Type":
-                            "application/json",
-
-                        "Cache-Control":
-                            "no-store"
-                    },
-
-                    body: JSON.stringify({
-
-                        ok: false,
-
-                        mensaje:
-                            "Gemini rechazó la solicitud por parámetros no válidos.",
-
-                        proveedor:
-                            "Google Gemini",
-
-                        modelo:
-                            MODELO,
-
-                        codigo:
-                            400,
-
-                        detalle:
-                            mensaje
-                    })
-                };
-            }
-
-
-            // =============================================
-            // ERROR GENERAL GEMINI
-            // =============================================
-
-            return {
-                statusCode: 500,
-
-                headers: {
-                    "Content-Type":
-                        "application/json",
-
-                    "Cache-Control":
-                        "no-store"
-                },
-
-                body: JSON.stringify({
-
-                    ok: false,
-
-                    mensaje:
-                        "Error al analizar la etiqueta con Gemini.",
-
-                    proveedor:
-                        "Google Gemini",
-
-                    modelo:
-                        MODELO,
-
-                    codigo:
-                        status || 500,
-
-                    detalle:
-                        mensaje
-                })
-            };
-        }
-
-
-        // =================================================
-        // OBTENER TEXTO
-        // =================================================
-
-        const texto =
-            result?.text;
-
-
-        if (!texto) {
-
-            console.error(
-                "Gemini no devolvió texto."
-            );
-
-            throw new Error(
-                "Gemini no devolvió ninguna respuesta."
-            );
-        }
-
 
         console.log(
-            "================================="
+            "---------------------------------"
         );
 
         console.log(
-            "RESPUESTA RECIBIDA DE GEMINI"
+            "Enviando solicitud a OpenRouter..."
         );
 
         console.log(
@@ -971,12 +677,368 @@ ${promptOriginal}
         );
 
         console.log(
+            "Imagen:",
+            mimeType
+        );
+
+        console.log(
+            "---------------------------------"
+        );
+
+
+        const inicio =
+            Date.now();
+
+
+        const response =
+            await fetch(
+
+                API_URL,
+
+                {
+
+                    method:
+                        "POST",
+
+                    headers: {
+
+                        "Content-Type":
+                            "application/json",
+
+                        "Authorization":
+                            `Bearer ${API_KEY}`,
+
+                        "HTTP-Referer":
+                            "https://bio-ia-2026.netlify.app",
+
+                        "X-Title":
+                            "BIO IA"
+
+                    },
+
+                    body:
+                        JSON.stringify(
+                            payload
+                        )
+
+                }
+
+            );
+
+
+        const duracion =
+            Date.now() -
+            inicio;
+
+
+        // =================================================
+        // LEER RESPUESTA
+        // =================================================
+
+        const responseText =
+            await response.text();
+
+
+        let data;
+
+
+        try {
+
+            data =
+                JSON.parse(
+                    responseText
+                );
+
+        } catch {
+
+            data = {
+
+                raw:
+                    responseText
+
+            };
+
+        }
+
+
+        // =================================================
+        // LOG RESPUESTA
+        // =================================================
+
+        console.log(
+            "================================="
+        );
+
+        console.log(
+            "RESPUESTA OPENROUTER"
+        );
+
+        console.log(
+            "================================="
+        );
+
+        console.log(
+            "HTTP:",
+            response.status
+        );
+
+        console.log(
+            "Modelo solicitado:",
+            MODELO
+        );
+
+        console.log(
+            "Modelo utilizado:",
+            data?.model ||
+            "No informado"
+        );
+
+        console.log(
+            "Duración:",
+            `${duracion} ms`
+        );
+
+        console.log(
+            "Error:",
+            data?.error?.message ||
+            "Ninguno"
+        );
+
+        console.log(
             "================================="
         );
 
 
+        // =================================================
+        // ERROR DE API
+        // =================================================
+
+        if (!response.ok) {
+
+            const errorCode =
+                data?.error?.code ||
+                response.status;
+
+            const errorMessage =
+                data?.error?.message ||
+                "OpenRouter rechazó la solicitud.";
+
+
+            // =============================================
+            // 401
+            // =============================================
+
+            if (
+                response.status === 401
+            ) {
+
+                return json(
+                    401,
+                    {
+
+                        ok:
+                            false,
+
+                        mensaje:
+                            "OpenRouter rechazó la API Key. Verifica OPENROUTER_API_KEY en Netlify.",
+
+                        proveedor:
+                            "OpenRouter",
+
+                        modelo:
+                            MODELO,
+
+                        codigo:
+                            401,
+
+                        detalle:
+                            errorMessage
+
+                    }
+                );
+
+            }
+
+
+            // =============================================
+            // 402
+            // =============================================
+
+            if (
+                response.status === 402
+            ) {
+
+                return json(
+                    402,
+                    {
+
+                        ok:
+                            false,
+
+                        mensaje:
+                            "OpenRouter requiere saldo/créditos para esta solicitud.",
+
+                        proveedor:
+                            "OpenRouter",
+
+                        modelo:
+                            MODELO,
+
+                        codigo:
+                            402,
+
+                        detalle:
+                            errorMessage
+
+                    }
+                );
+
+            }
+
+
+            // =============================================
+            // 429
+            // =============================================
+
+            if (
+                response.status === 429
+            ) {
+
+                return json(
+                    429,
+                    {
+
+                        ok:
+                            false,
+
+                        mensaje:
+                            "OpenRouter rechazó la solicitud por límite de uso.",
+
+                        proveedor:
+                            "OpenRouter",
+
+                        modelo:
+                            MODELO,
+
+                        codigo:
+                            429,
+
+                        detalle:
+                            errorMessage
+
+                    }
+                );
+
+            }
+
+
+            // =============================================
+            // 400
+            // =============================================
+
+            if (
+                response.status === 400
+            ) {
+
+                return json(
+                    400,
+                    {
+
+                        ok:
+                            false,
+
+                        mensaje:
+                            "OpenRouter rechazó la solicitud por parámetros no válidos.",
+
+                        proveedor:
+                            "OpenRouter",
+
+                        modelo:
+                            MODELO,
+
+                        codigo:
+                            400,
+
+                        detalle:
+                            errorMessage
+
+                    }
+                );
+
+            }
+
+
+            // =============================================
+            // ERROR GENERAL OPENROUTER
+            // =============================================
+
+            return json(
+                502,
+                {
+
+                    ok:
+                        false,
+
+                    mensaje:
+                        "OpenRouter no pudo procesar la solicitud.",
+
+                    proveedor:
+                        "OpenRouter",
+
+                    modelo:
+                        MODELO,
+
+                    codigo:
+                        errorCode,
+
+                    detalle:
+                        errorMessage
+
+                }
+            );
+
+        }
+
+
+        // =================================================
+        // OBTENER TEXTO
+        // =================================================
+
+        const texto =
+            extractText(
+                data
+            );
+
+
+        if (!texto) {
+
+            console.error(
+                "OpenRouter no devolvió texto."
+            );
+
+            throw new Error(
+                "OpenRouter no devolvió ninguna respuesta."
+            );
+
+        }
+
+
         console.log(
-            texto
+            "================================="
+        );
+
+        console.log(
+            "RESPUESTA RECIBIDA"
+        );
+
+        console.log(
+            "================================="
+        );
+
+        console.log(
+            "Modelo utilizado:",
+            data?.model ||
+            "No informado"
         );
 
 
@@ -986,10 +1048,15 @@ ${promptOriginal}
 
         let datos;
 
+
         try {
 
             datos =
-                JSON.parse(texto);
+                JSON.parse(
+                    cleanJsonText(
+                        texto
+                    )
+                );
 
         } catch (errorJSON) {
 
@@ -1002,8 +1069,9 @@ ${promptOriginal}
             );
 
             throw new Error(
-                "Gemini devolvió una respuesta que no es JSON válido."
+                "OpenRouter devolvió una respuesta que no es JSON válido."
             );
+
         }
 
 
@@ -1017,18 +1085,21 @@ ${promptOriginal}
 
             typeof datos !== "object" ||
 
-            Array.isArray(datos)
+            Array.isArray(
+                datos
+            )
 
         ) {
 
             throw new Error(
-                "Gemini devolvió datos vacíos o inválidos."
+                "OpenRouter devolvió datos vacíos o inválidos."
             );
+
         }
 
 
         // =================================================
-        // ASEGURAR CAMPOS
+        // ASEGURAR CAMPOS STRING
         // =================================================
 
         const camposString = [
@@ -1052,6 +1123,10 @@ ${promptOriginal}
         ];
 
 
+        // =================================================
+        // ASEGURAR CAMPOS ARRAY
+        // =================================================
+
         const camposArray = [
 
             "funcion",
@@ -1064,37 +1139,79 @@ ${promptOriginal}
         ];
 
 
-        for (const campo of camposString) {
+        // =================================================
+        // NORMALIZAR STRINGS
+        // =================================================
+
+        for (
+            const campo
+            of camposString
+        ) {
 
             if (
-                typeof datos[campo] !== "string"
+                typeof datos[campo] !==
+                "string"
             ) {
 
                 datos[campo] =
+
                     datos[campo] == null
-                        ? "No encontrado"
-                        : String(datos[campo]);
+
+                        ?
+
+                        "No encontrado"
+
+                        :
+
+                        String(
+                            datos[campo]
+                        );
+
             }
+
         }
 
 
-        for (const campo of camposArray) {
+        // =================================================
+        // NORMALIZAR ARRAYS
+        // =================================================
 
-            if (!Array.isArray(datos[campo])) {
+        for (
+            const campo
+            of camposArray
+        ) {
+
+            if (
+                !Array.isArray(
+                    datos[campo]
+                )
+            ) {
 
                 if (
+
                     datos[campo] == null ||
+
                     datos[campo] === ""
+
                 ) {
 
-                    datos[campo] = [];
+                    datos[campo] =
+                        [];
 
                 } else {
 
-                    datos[campo] =
-                        [String(datos[campo])];
+                    datos[campo] = [
+
+                        String(
+                            datos[campo]
+                        )
+
+                    ];
+
                 }
+
             }
+
         }
 
 
@@ -1115,7 +1232,9 @@ ${promptOriginal}
         );
 
         console.log(
-            JSON.stringify(datos)
+            JSON.stringify(
+                datos
+            )
         );
 
 
@@ -1123,36 +1242,31 @@ ${promptOriginal}
         // RESPUESTA EXITOSA
         // =================================================
 
-        return {
+        return json(
+            200,
+            {
 
-            statusCode: 200,
-
-            headers: {
-
-                "Content-Type":
-                    "application/json",
-
-                "Cache-Control":
-                    "no-store"
-            },
-
-            body: JSON.stringify({
-
-                ok: true,
+                ok:
+                    true,
 
                 proveedor:
-                    "Google Gemini",
+                    "OpenRouter",
 
-                modelo:
+                modelo_solicitado:
                     MODELO,
+
+                modelo_utilizado:
+                    data?.model ||
+                    null,
 
                 confianza:
                     null,
 
                 datos:
                     datos
-            })
-        };
+
+            }
+        );
 
 
     } catch (error) {
@@ -1166,7 +1280,7 @@ ${promptOriginal}
         );
 
         console.error(
-            "ERROR GENERAL EN analizarEtiqueta"
+            "ERROR GENERAL EN analizarEtiqueta V2"
         );
 
         console.error(
@@ -1183,32 +1297,177 @@ ${promptOriginal}
             String(error);
 
 
-        return {
+        return json(
+            500,
+            {
 
-            statusCode: 500,
-
-            headers: {
-
-                "Content-Type":
-                    "application/json",
-
-                "Cache-Control":
-                    "no-store"
-            },
-
-            body: JSON.stringify({
-
-                ok: false,
+                ok:
+                    false,
 
                 mensaje:
                     mensaje,
 
                 proveedor:
-                    "Google Gemini",
+                    "OpenRouter",
 
                 modelo:
                     MODELO
-            })
-        };
+
+            }
+        );
+
     }
+
 };
+
+
+// =====================================================
+// EXTRAER TEXTO DE OPENROUTER
+// =====================================================
+
+function extractText(data) {
+
+    const content =
+        data?.choices?.[0]?.message?.content;
+
+
+    if (
+        typeof content ===
+        "string"
+    ) {
+
+        return content;
+
+    }
+
+
+    if (
+        Array.isArray(content)
+    ) {
+
+        return content
+
+            .map(
+                (part) =>
+                    part?.text ||
+                    ""
+            )
+
+            .filter(
+                Boolean
+            )
+
+            .join("\n");
+
+    }
+
+
+    return "";
+
+}
+
+
+// =====================================================
+// LIMPIAR JSON
+// =====================================================
+
+function cleanJsonText(text) {
+
+    if (
+        typeof text !==
+        "string"
+    ) {
+
+        return "";
+
+    }
+
+
+    let limpio =
+        text.trim();
+
+
+    // Eliminar ```json
+    if (
+        limpio.startsWith(
+            "```json"
+        )
+    ) {
+
+        limpio =
+            limpio.slice(
+                7
+            );
+
+    }
+
+
+    // Eliminar ```
+    if (
+        limpio.startsWith(
+            "```"
+        )
+    ) {
+
+        limpio =
+            limpio.slice(
+                3
+            );
+
+    }
+
+
+    if (
+        limpio.endsWith(
+            "```"
+        )
+    ) {
+
+        limpio =
+            limpio.slice(
+                0,
+                -3
+            );
+
+    }
+
+
+    return limpio.trim();
+
+}
+
+
+// =====================================================
+// RESPUESTA JSON NETLIFY
+// =====================================================
+
+function json(
+    statusCode,
+    body
+) {
+
+    return {
+
+        statusCode:
+
+            statusCode,
+
+        headers: {
+
+            "Content-Type":
+                "application/json; charset=utf-8",
+
+            "Cache-Control":
+                "no-store"
+
+        },
+
+        body:
+
+            JSON.stringify(
+                body
+            )
+
+    };
+
+}
