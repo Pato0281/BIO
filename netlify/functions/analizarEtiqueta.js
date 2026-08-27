@@ -2,7 +2,7 @@ const API_KEY = process.env.OPENROUTER_API_KEY;
 const API_URL = "https://openrouter.ai/api/v1/chat/completions";
 
 // Modelo gratuito de visión que ya estás utilizando en functions/index.js
-const MODELO = "qwen/qwen2.5-vl-72b-instruct:free";
+const MODELO = "allenai/molmo-2-8b:free";
 
 // =====================================================
 // FUNCIÓN PRINCIPAL NETLIFY
