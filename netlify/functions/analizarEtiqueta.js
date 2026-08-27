@@ -1,71 +1,74 @@
 const API_KEY = process.env.OPENROUTER_API_KEY;
 const API_URL = "https://openrouter.ai/api/v1/chat/completions";
 
-// Modelo gratuito de visión que ya estás utilizando en functions/index.js
 const MODELO = "openrouter/free";
 
+const SAG_PUBLICACIONES_URL =
+    "https://www.sag.gob.cl/ambitos-de-accion/autorizacion-y-evaluacion-de-plaguicidas/publicaciones";
+
+
 // =====================================================
-// FUNCIÓN PRINCIPAL NETLIFY
+// FUNCIÓN PRINCIPAL
 // =====================================================
 
 exports.handler = async (event) => {
 
-    // -------------------------------------------------
-    // MÉTODO HTTP
-    // -------------------------------------------------
-
     if (event.httpMethod !== "POST") {
+
         return json(405, {
             ok: false,
             mensaje: "Método no permitido."
         });
+
     }
 
     try {
 
-        // -------------------------------------------------
+        // =================================================
         // API KEY
-        // -------------------------------------------------
+        // =================================================
 
         if (!API_KEY) {
-
-            console.error(
-                "ERROR: OPENROUTER_API_KEY no está configurada."
-            );
 
             return json(500, {
                 ok: false,
                 mensaje:
-                    "No está configurada la variable OPENROUTER_API_KEY en Netlify.",
-                proveedor: "OpenRouter",
-                modelo: MODELO
+                    "No está configurada OPENROUTER_API_KEY en Netlify.",
+                proveedor:
+                    "OpenRouter",
+                modelo:
+                    MODELO
             });
+
         }
 
-        // -------------------------------------------------
+
+        // =================================================
         // BODY
-        // -------------------------------------------------
+        // =================================================
 
         let body;
 
         try {
-            body = JSON.parse(event.body || "{}");
-        } catch (error) {
 
-            console.error(
-                "ERROR: Body no contiene JSON válido."
+            body = JSON.parse(
+                event.body || "{}"
             );
+
+        } catch {
 
             return json(400, {
                 ok: false,
                 mensaje:
                     "El cuerpo de la solicitud no es JSON válido."
             });
+
         }
 
-        // -------------------------------------------------
+
+        // =================================================
         // IMAGEN
-        // -------------------------------------------------
+        // =================================================
 
         let imageBase64 =
             body.image ||
@@ -76,18 +79,25 @@ exports.handler = async (event) => {
             body.prompt ||
             "";
 
+
         if (!imageBase64) {
+
             return json(400, {
                 ok: false,
-                mensaje: "No se recibió ninguna imagen."
+                mensaje:
+                    "No se recibió ninguna imagen."
             });
+
         }
 
-        // -------------------------------------------------
-        // MIME TYPE
-        // -------------------------------------------------
 
-        let mimeType = "image/jpeg";
+        // =================================================
+        // MIME TYPE
+        // =================================================
+
+        let mimeType =
+            "image/jpeg";
+
 
         if (
             typeof imageBase64 === "string" &&
@@ -99,95 +109,118 @@ exports.handler = async (event) => {
                     /^data:([^;]+);base64,/
                 );
 
-            if (match && match[1]) {
-                mimeType = match[1];
+            if (match?.[1]) {
+
+                mimeType =
+                    match[1];
+
             }
+
         }
 
-        // -------------------------------------------------
-        // LIMPIAR DATA URL
-        // -------------------------------------------------
+
+        // =================================================
+        // LIMPIAR BASE64
+        // =================================================
 
         if (
             typeof imageBase64 === "string" &&
             imageBase64.includes(",")
         ) {
+
             imageBase64 =
                 imageBase64.split(",")[1];
+
         }
 
-        // -------------------------------------------------
-        // VALIDAR IMAGEN
-        // -------------------------------------------------
 
-        if (!mimeType.startsWith("image/")) {
+        // =================================================
+        // VALIDAR IMAGEN
+        // =================================================
+
+        if (
+            !mimeType.startsWith("image/")
+        ) {
 
             return json(400, {
                 ok: false,
                 mensaje:
                     `Tipo de imagen no soportado: ${mimeType}`
             });
+
         }
 
-        // -------------------------------------------------
-        // LOG INICIAL
-        // -------------------------------------------------
 
-        console.log("=================================");
-        console.log("INICIO analizarEtiqueta");
-        console.log("=================================");
-        console.log("Proveedor: OpenRouter");
-        console.log("Modelo:", MODELO);
-        console.log("Imagen:", mimeType);
         console.log(
-            "Tamaño Base64:",
+            "======================================"
+        );
+
+        console.log(
+            "BIO IA V4"
+        );
+
+        console.log(
+            "======================================"
+        );
+
+        console.log(
+            "Proveedor:",
+            "OpenRouter"
+        );
+
+        console.log(
+            "Modelo:",
+            MODELO
+        );
+
+        console.log(
+            "Imagen recibida:",
+            mimeType
+        );
+
+        console.log(
+            "Tamaño imagen Base64:",
             imageBase64.length
         );
-        console.log(
-            "Google Search: DESACTIVADO"
-        );
-        console.log(
-            "Prueba: Qwen Vision + JSON object"
-        );
-        console.log("=================================");
 
-        // -------------------------------------------------
-        // PROMPT
-        // -------------------------------------------------
+
+        // =================================================
+        // PROMPT DE IDENTIFICACIÓN
+        // =================================================
 
         const prompt = `
-Eres BIO IA, un asistente especializado en productos
-fitosanitarios agrícolas utilizados en Chile.
 
-Analiza cuidadosamente la fotografía proporcionada.
+Eres BÍO IA, especialista en productos agrícolas,
+fitosanitarios y protección vegetal utilizados en Chile.
 
-IMPORTANTE:
-NO INVENTES NINGÚN DATO.
+Analiza la fotografía de la etiqueta.
 
-Si un dato no puede determinarse con suficiente confianza
-a partir de la imagen, utiliza:
+Tu prioridad absoluta es identificar correctamente
+el producto.
 
-"No encontrado"
+NO INVENTES INFORMACIÓN.
 
 =========================================
-IDENTIFICACIÓN DEL PRODUCTO
+IDENTIFICACIÓN
 =========================================
 
-Identifica, si es posible:
+Identifica cuando sean visibles:
 
 - nombre comercial
 - ingrediente activo
 - concentración
 - formulación
-- empresa fabricante
+- fabricante
+- distribuidor
 - registro SAG
 - contenido
+- tipo de producto
 
 =========================================
-TIPO DE PRODUCTO
+FUNCIÓN
 =========================================
 
-Determina si corresponde a:
+Determina la función cuando exista evidencia:
 
 - Insecticida
 - Fungicida
@@ -195,94 +228,78 @@ Determina si corresponde a:
 - Acaricida
 - Nematicida
 - Bactericida
-- Molusquicida
 - Fertilizante
-- Fertilizante Foliar
 - Bioestimulante
-- Corrector Nutricional
 - Coadyuvante
-- Regulador de Crecimiento
-- Inoculante
-- Producto Biológico
-- Enmienda
+- Regulador de crecimiento
+- Producto biológico
 - Otro
 
 =========================================
-TIPO DE REGISTRO
+MODO DE ACCIÓN
 =========================================
 
-Devuelve:
+Si la etiqueta indica:
 
-"quimico"
+- sistémico
+- contacto
+- ingestión
+- translaminar
+- fumigante
+- preventivo
+- curativo
+- erradicante
+- residual
 
-o
+debes incluirlo.
 
-"biologico"
+MUY IMPORTANTE:
+
+Si aparece literalmente una frase como:
+
+"actividad sistémica"
+
+debes devolver:
+
+"Sistémico"
+
+en modo_accion.
 
 =========================================
-INFORMACIÓN TÉCNICA
+INFORMACIÓN VISIBLE
 =========================================
 
-Extrae de la imagen, cuando sea legible:
+Extrae cuando sea legible:
 
 - dosis
 - unidad de dosis
-- mojamiento / volumen de agua
-- cultivos autorizados
-- plagas objetivo
+- mojamiento
+- cultivos
+- plagas
 - enfermedades
 - malezas
-- modo de acción
 - carencia
 - reentrada
 - compatibilidad
 - observaciones
 
 =========================================
-DOSIS
+NO INVENTAR
 =========================================
 
-Si aparecen tablas de aplicación,
-mantén la relación:
+Si algo NO aparece claramente:
 
-cultivo + plaga + dosis + unidad + agua.
+texto:
+"No encontrado"
 
-No inventes una dosis genérica.
-
-=========================================
-MODO DE ACCIÓN
-=========================================
-
-Si aparece información sobre:
-
-- Contacto
-- Sistémico
-- Ingestión
-- Translaminar
-- Fumigante
-- Preventivo
-- Curativo
-- Erradicante
-- Residual
-- IRAC
-- FRAC
-- HRAC
-
-consérvala.
-
-No inventes ninguna clasificación.
+arrays:
+[]
 
 =========================================
-RESPUESTA
+JSON
 =========================================
 
-Devuelve EXCLUSIVAMENTE un objeto JSON válido.
-
-NO Markdown.
-NO comentarios.
-NO explicaciones.
-
-Utiliza exactamente esta estructura:
+Devuelve exclusivamente JSON válido:
 
 {
   "tipo_registro": "",
@@ -308,128 +325,148 @@ Utiliza exactamente esta estructura:
   "observaciones": ""
 }
 
-Todos los campos deben existir.
+No agregues Markdown.
+No agregues explicaciones.
 
-Cuando no haya información suficiente:
-
-- texto: "No encontrado"
-- arreglo: []
-
-=========================================
-INFORMACIÓN ADICIONAL
-=========================================
+Información adicional entregada por la aplicación:
 
 ${promptOriginal}
+
 `;
 
-        // -------------------------------------------------
-        // PETICIÓN OPENROUTER
-        // -------------------------------------------------
+
+        // =================================================
+        // LLAMADA OPENROUTER
+        // =================================================
 
         const payload = {
 
-            model: MODELO,
+            model:
+                MODELO,
 
-            temperature: 0.1,
+            temperature:
+                0.1,
 
             response_format: {
-                type: "json_object"
+                type:
+                    "json_object"
             },
 
             messages: [
+
                 {
-                    role: "user",
+                    role:
+                        "user",
 
                     content: [
+
                         {
-                            type: "text",
-                            text: prompt
+                            type:
+                                "text",
+
+                            text:
+                                prompt
                         },
 
                         {
-                            type: "image_url",
+                            type:
+                                "image_url",
 
                             image_url: {
+
                                 url:
                                     `data:${mimeType};base64,${imageBase64}`
+
                             }
+
                         }
+
                     ]
+
                 }
+
             ]
+
         };
 
+
         console.log(
-            "Enviando solicitud a OpenRouter..."
+            "Enviando imagen a OpenRouter..."
         );
 
-        const inicio = Date.now();
 
-        const response = await fetch(
-            API_URL,
-            {
-                method: "POST",
+        const inicio =
+            Date.now();
 
-                headers: {
-                    "Content-Type":
-                        "application/json",
 
-                    "Authorization":
-                        `Bearer ${API_KEY}`,
+        const response =
+            await fetch(
 
-                    "HTTP-Referer":
-                        "https://bio-ia-2026.netlify.app",
+                API_URL,
 
-                    "X-Title":
-                        "BIO IA"
-                },
+                {
 
-                body:
-                    JSON.stringify(payload)
-            }
-        );
+                    method:
+                        "POST",
+
+                    headers: {
+
+                        "Content-Type":
+                            "application/json",
+
+                        "Authorization":
+                            `Bearer ${API_KEY}`,
+
+                        "HTTP-Referer":
+                            "https://bio-ia-2026.netlify.app",
+
+                        "X-Title":
+                            "BIO IA"
+
+                    },
+
+                    body:
+                        JSON.stringify(
+                            payload
+                        )
+
+                }
+
+            );
+
 
         const duracion =
-            Date.now() - inicio;
+            Date.now() -
+            inicio;
 
-        // -------------------------------------------------
-        // RESPUESTA DEL PROVEEDOR
-        // -------------------------------------------------
 
         const responseText =
             await response.text();
 
+
         let data;
 
+
         try {
+
             data =
-                JSON.parse(responseText);
+                JSON.parse(
+                    responseText
+                );
+
         } catch {
+
             data = {
-                raw: responseText
+                raw:
+                    responseText
             };
+
         }
 
-        console.log(
-            "================================="
-        );
 
         console.log(
-            "RESPUESTA OPENROUTER"
-        );
-
-        console.log(
-            "================================="
-        );
-
-        console.log(
-            "HTTP:",
+            "Respuesta OpenRouter:",
             response.status
-        );
-
-        console.log(
-            "Modelo solicitado:",
-            MODELO
         );
 
         console.log(
@@ -439,152 +476,83 @@ ${promptOriginal}
         );
 
         console.log(
-            "Duración:",
+            "Tiempo:",
             `${duracion} ms`
         );
 
-        console.log(
-            "Error:",
-            data?.error?.message ||
-                "Ninguno"
-        );
 
-        console.log(
-            "================================="
-        );
-
-        // -------------------------------------------------
-        // ERROR DE OPENROUTER
-        // -------------------------------------------------
+        // =================================================
+        // ERROR OPENROUTER
+        // =================================================
 
         if (!response.ok) {
 
-            const errorCode =
-                data?.error?.code ||
-                response.status;
-
-            const errorMessage =
-                data?.error?.message ||
-                "OpenRouter rechazó la solicitud.";
-
-            if (response.status === 401) {
-
-                return json(401, {
-                    ok: false,
-                    mensaje:
-                        "OpenRouter rechazó la API Key.",
-                    proveedor:
-                        "OpenRouter",
-                    modelo:
-                        MODELO,
-                    codigo:
-                        401,
-                    detalle:
-                        errorMessage
-                });
-            }
-
-            if (response.status === 402) {
-
-                return json(402, {
-                    ok: false,
-                    mensaje:
-                        "OpenRouter requiere saldo o créditos para esta solicitud.",
-                    proveedor:
-                        "OpenRouter",
-                    modelo:
-                        MODELO,
-                    codigo:
-                        402,
-                    detalle:
-                        errorMessage
-                });
-            }
-
-            if (response.status === 429) {
-
-                return json(429, {
-                    ok: false,
-                    mensaje:
-                        "OpenRouter rechazó la solicitud por límite de uso.",
-                    proveedor:
-                        "OpenRouter",
-                    modelo:
-                        MODELO,
-                    codigo:
-                        429,
-                    detalle:
-                        errorMessage
-                });
-            }
-
-            if (response.status === 400) {
-
-                return json(400, {
-                    ok: false,
-                    mensaje:
-                        "OpenRouter rechazó la solicitud por parámetros no válidos.",
-                    proveedor:
-                        "OpenRouter",
-                    modelo:
-                        MODELO,
-                    codigo:
-                        400,
-                    detalle:
-                        errorMessage
-                });
-            }
-
             return json(502, {
-                ok: false,
+
+                ok:
+                    false,
+
                 mensaje:
                     "OpenRouter no pudo procesar la solicitud.",
+
                 proveedor:
                     "OpenRouter",
+
                 modelo:
                     MODELO,
+
                 codigo:
-                    errorCode,
+                    data?.error?.code ||
+                    response.status,
+
                 detalle:
-                    errorMessage
+                    data?.error?.message ||
+                    "Error desconocido"
+
             });
+
         }
 
-        // -------------------------------------------------
-        // EXTRAER TEXTO
-        // -------------------------------------------------
+
+        // =================================================
+        // TEXTO RESPUESTA
+        // =================================================
 
         const texto =
-            extractText(data);
+            extractText(
+                data
+            );
+
 
         if (!texto) {
 
             throw new Error(
-                "OpenRouter no devolvió ninguna respuesta."
+                "OpenRouter no devolvió texto."
             );
+
         }
 
-        console.log(
-            "Respuesta recibida correctamente."
-        );
 
-        // -------------------------------------------------
-        // CONVERTIR JSON
-        // -------------------------------------------------
+        // =================================================
+        // JSON
+        // =================================================
 
         let datos;
+
 
         try {
 
             datos =
                 JSON.parse(
-                    cleanJsonText(texto)
+                    cleanJsonText(
+                        texto
+                    )
                 );
 
-        } catch (errorJSON) {
+        } catch {
 
             console.error(
-                "ERROR CONVIRTIENDO RESPUESTA A JSON"
+                "JSON inválido recibido:"
             );
 
             console.error(
@@ -592,240 +560,860 @@ ${promptOriginal}
             );
 
             throw new Error(
-                "OpenRouter devolvió una respuesta que no es JSON válido."
+                "La respuesta de la IA no es JSON válido."
             );
+
         }
 
-        // -------------------------------------------------
-        // VALIDAR OBJETO
-        // -------------------------------------------------
 
-        if (
-            !datos ||
-            typeof datos !== "object" ||
-            Array.isArray(datos)
-        ) {
+        // =================================================
+        // NORMALIZAR
+        // =================================================
 
-            throw new Error(
-                "OpenRouter devolvió datos inválidos."
-            );
-        }
-
-        // -------------------------------------------------
-        // CAMPOS DE TEXTO
-        // -------------------------------------------------
-
-        const camposString = [
-
-            "tipo_registro",
-            "nombre",
-            "fabricante",
-            "registro",
-            "ingrediente_activo",
-            "concentracion",
-            "formulacion",
-            "dosis",
-            "unidad_dosis",
-            "mojamiento",
-            "carencia",
-            "reentrada",
-            "contenido",
-            "compatibilidad",
-            "observaciones"
-        ];
-
-        // -------------------------------------------------
-        // CAMPOS ARRAY
-        // -------------------------------------------------
-
-        const camposArray = [
-
-            "funcion",
-            "cultivos",
-            "plagas_objetivo",
-            "enfermedades",
-            "malezas",
-            "modo_accion"
-        ];
-
-        // -------------------------------------------------
-        // NORMALIZAR TEXTOS
-        // -------------------------------------------------
-
-        for (
-            const campo
-            of camposString
-        ) {
-
-            if (
-                typeof datos[campo] !==
-                "string"
-            ) {
-
-                datos[campo] =
-                    datos[campo] == null
-                        ? "No encontrado"
-                        : String(
-                            datos[campo]
-                        );
-            }
-        }
-
-        // -------------------------------------------------
-        // NORMALIZAR ARRAYS
-        // -------------------------------------------------
-
-        for (
-            const campo
-            of camposArray
-        ) {
-
-            if (
-                !Array.isArray(
-                    datos[campo]
-                )
-            ) {
-
-                if (
-                    datos[campo] == null ||
-                    datos[campo] === ""
-                ) {
-
-                    datos[campo] = [];
-
-                } else {
-
-                    datos[campo] = [
-                        String(
-                            datos[campo]
-                        )
-                    ];
-                }
-            }
-        }
-
-        // -------------------------------------------------
-        // LOG FINAL
-        // -------------------------------------------------
-
-        console.log(
-            "================================="
-        );
-
-        console.log(
-            "JSON CONVERTIDO CORRECTAMENTE"
-        );
-
-        console.log(
-            JSON.stringify(
+        datos =
+            normalizarDatos(
                 datos
+            );
+
+
+        // =================================================
+        // BÚSQUEDA DIRECTA SAG
+        // =================================================
+
+        console.log(
+            "Iniciando búsqueda directa SAG..."
+        );
+
+
+        const sag =
+            await buscarEnSAG(
+                datos.nombre
+            );
+
+
+        console.log(
+            "Resultado SAG:",
+            JSON.stringify(
+                sag
             )
         );
 
-        console.log(
-            "================================="
-        );
 
-        // -------------------------------------------------
-        // RESPUESTA
-        // -------------------------------------------------
+        // =================================================
+        // COMPLETAR INFORMACIÓN SAG BÁSICA
+        // =================================================
+
+        if (
+            sag.encontrado
+        ) {
+
+            if (
+                (!datos.registro ||
+                 datos.registro === "No encontrado") &&
+                sag.registro
+            ) {
+
+                datos.registro =
+                    sag.registro;
+
+            }
+
+
+            if (
+                (!datos.fabricante ||
+                 datos.fabricante === "No encontrado") &&
+                sag.empresa
+            ) {
+
+                datos.fabricante =
+                    sag.empresa;
+
+            }
+
+        }
+
+
+        // =================================================
+        // RESPUESTA FINAL
+        // =================================================
 
         return json(
             200,
             {
-                ok: true,
+
+                ok:
+                    true,
 
                 proveedor:
                     "OpenRouter",
 
-                modelo_solicitado:
+                modelo:
+                    data?.model ||
                     MODELO,
 
-                modelo_utilizado:
-                    data?.model ||
-                    null,
+                modo:
+                    "identificacion + consulta SAG",
 
-                confianza:
-                    null,
+                sag:
+                    sag,
 
                 datos:
                     datos
+
             }
         );
+
 
     } catch (error) {
 
         console.error(
-            "================================="
+            "======================================"
         );
 
         console.error(
-            "ERROR GENERAL EN analizarEtiqueta"
-        );
-
-        console.error(
-            "================================="
+            "ERROR GENERAL BIO IA V4"
         );
 
         console.error(
             error
         );
 
-        const mensaje =
-            error?.message ||
-            String(error);
+        console.error(
+            "======================================"
+        );
+
 
         return json(
             500,
             {
-                ok: false,
+
+                ok:
+                    false,
 
                 mensaje:
-                    mensaje,
+                    error?.message ||
+                    String(error),
 
                 proveedor:
                     "OpenRouter",
 
                 modelo:
                     MODELO
+
             }
         );
+
     }
+
 };
 
 
 // =====================================================
-// EXTRAER TEXTO
+// NORMALIZAR DATOS
 // =====================================================
 
-function extractText(data) {
+function normalizarDatos(
+    datos
+) {
+
+    if (
+        !datos ||
+        typeof datos !== "object" ||
+        Array.isArray(datos)
+    ) {
+
+        datos = {};
+
+    }
+
+
+    const strings = [
+
+        "tipo_registro",
+        "nombre",
+        "fabricante",
+        "registro",
+        "ingrediente_activo",
+        "concentracion",
+        "formulacion",
+        "dosis",
+        "unidad_dosis",
+        "mojamiento",
+        "carencia",
+        "reentrada",
+        "contenido",
+        "compatibilidad",
+        "observaciones"
+
+    ];
+
+
+    const arrays = [
+
+        "funcion",
+        "cultivos",
+        "plagas_objetivo",
+        "enfermedades",
+        "malezas",
+        "modo_accion"
+
+    ];
+
+
+    for (
+        const campo
+        of strings
+    ) {
+
+        if (
+            typeof datos[campo] !== "string" ||
+            datos[campo].trim() === ""
+        ) {
+
+            datos[campo] =
+                "No encontrado";
+
+        }
+
+    }
+
+
+    for (
+        const campo
+        of arrays
+    ) {
+
+        if (
+            !Array.isArray(
+                datos[campo]
+            )
+        ) {
+
+            if (
+                datos[campo] &&
+                String(
+                    datos[campo]
+                ).trim()
+            ) {
+
+                datos[campo] = [
+
+                    String(
+                        datos[campo]
+                    ).trim()
+
+                ];
+
+            } else {
+
+                datos[campo] = [];
+
+            }
+
+        }
+
+    }
+
+
+    // =================================================
+    // CORREGIR MODO DE ACCIÓN
+    // =================================================
+
+    const textoAccion =
+
+        (
+
+            String(
+                datos.modo_accion || ""
+            ) +
+
+            " " +
+
+            String(
+                datos.observaciones || ""
+            )
+
+        ).toLowerCase();
+
+
+    const acciones =
+        datos.modo_accion.map(
+            x =>
+                String(x)
+                    .trim()
+        );
+
+
+    if (
+        textoAccion.includes(
+            "actividad sistémica"
+        ) ||
+        textoAccion.includes(
+            "actividad sistemica"
+        ) ||
+        textoAccion.includes(
+            "sistémica"
+        ) ||
+        textoAccion.includes(
+            "sistemica"
+        )
+    ) {
+
+        if (
+            !acciones.some(
+                x =>
+                    x.toLowerCase()
+                        .includes(
+                            "sistém"
+                        )
+            )
+        ) {
+
+            acciones.push(
+                "Sistémico"
+            );
+
+        }
+
+    }
+
+
+    datos.modo_accion =
+        acciones;
+
+
+    // =================================================
+    // CORREGIR FUNCIÓN
+    // =================================================
+
+    if (
+        datos.nombre &&
+        datos.funcion.length === 0
+    ) {
+
+        const texto =
+            (
+                datos.observaciones || ""
+            ).toLowerCase();
+
+
+        if (
+            texto.includes(
+                "insecticida"
+            )
+        ) {
+
+            datos.funcion.push(
+                "Insecticida"
+            );
+
+        }
+
+    }
+
+
+    return datos;
+
+}
+
+
+// =====================================================
+// BUSCAR DIRECTAMENTE EN SAG
+// =====================================================
+
+async function buscarEnSAG(
+    nombre
+) {
+
+    if (
+        !nombre ||
+        nombre === "No encontrado"
+    ) {
+
+        return {
+
+            encontrado:
+                false,
+
+            fuente:
+                "SAG",
+
+            mensaje:
+                "No se pudo realizar la búsqueda porque no se identificó el producto."
+
+        };
+
+    }
+
+
+    try {
+
+        // -------------------------------------------------
+        // El portal SAG permite filtrar publicaciones
+        // por título.
+        // -------------------------------------------------
+
+        const url =
+            SAG_PUBLICACIONES_URL +
+            "?field_fecha_otros_value=" +
+            "&field_tema_otros_documentos_target_id=All" +
+            "&field_tipo_de_publicacion_target_id=All" +
+            "&title=" +
+            encodeURIComponent(
+                nombre
+            );
+
+
+        console.log(
+            "URL SAG:",
+            url
+        );
+
+
+        const response =
+            await fetch(
+                url,
+                {
+                    method:
+                        "GET",
+
+                    headers: {
+
+                        "User-Agent":
+                            "Mozilla/5.0 BIO-IA",
+
+                        "Accept":
+                            "text/html,application/xhtml+xml"
+
+                    }
+
+                }
+            );
+
+
+        if (!response.ok) {
+
+            return {
+
+                encontrado:
+                    false,
+
+                fuente:
+                    "SAG",
+
+                httpStatus:
+                    response.status,
+
+                mensaje:
+                    "El sitio SAG no respondió correctamente."
+
+            };
+
+        }
+
+
+        const html =
+            await response.text();
+
+
+        const htmlNormalizado =
+            normalizarHTML(
+                html
+            );
+
+
+        const nombreBuscado =
+            normalizarTexto(
+                nombre
+            );
+
+
+        // -------------------------------------------------
+        // Buscar el producto en la página
+        // -------------------------------------------------
+
+        const encontrado =
+            htmlNormalizado.includes(
+                nombreBuscado
+            );
+
+
+        if (!encontrado) {
+
+            return {
+
+                encontrado:
+                    false,
+
+                fuente:
+                    "SAG",
+
+                productoBuscado:
+                    nombre,
+
+                mensaje:
+                    "Producto no encontrado en el resultado directo del SAG."
+
+            };
+
+        }
+
+
+        // -------------------------------------------------
+        // Buscar empresa en las filas cercanas
+        // -------------------------------------------------
+
+        const empresa =
+            extraerEmpresaSAG(
+                html,
+                nombre
+            );
+
+
+        // -------------------------------------------------
+        // Buscar enlace de publicación
+        // -------------------------------------------------
+
+        const enlace =
+            extraerEnlaceProducto(
+                html,
+                nombre
+            );
+
+
+        return {
+
+            encontrado:
+                true,
+
+            fuente:
+                "SAG Chile",
+
+            productoBuscado:
+                nombre,
+
+            empresa:
+                empresa ||
+                "",
+
+            registro:
+                "",
+
+            enlace:
+                enlace ||
+                "",
+
+            mensaje:
+                "Producto encontrado en el portal oficial del SAG."
+
+        };
+
+    } catch (error) {
+
+        console.error(
+            "Error consultando SAG:",
+            error
+        );
+
+
+        return {
+
+            encontrado:
+                false,
+
+            fuente:
+                "SAG",
+
+            mensaje:
+                "No fue posible consultar el portal SAG.",
+
+            error:
+                error?.message ||
+                String(error)
+
+        };
+
+    }
+
+}
+
+
+// =====================================================
+// EXTRAER EMPRESA SAG
+// =====================================================
+
+function extraerEmpresaSAG(
+    html,
+    nombre
+) {
+
+    const posicion =
+        html.toLowerCase()
+            .indexOf(
+                String(
+                    nombre
+                ).toLowerCase()
+            );
+
+
+    if (
+        posicion === -1
+    ) {
+
+        return "";
+
+    }
+
+
+    const fragmento =
+        html.slice(
+            posicion,
+            posicion + 1800
+        );
+
+
+    const match =
+        fragmento.match(
+            /Empresa\s*:\s*([^<\n]+)/i
+        );
+
+
+    if (
+        match?.[1]
+    ) {
+
+        return
+            decodeEntities(
+                match[1]
+                    .trim()
+            );
+
+    }
+
+
+    return "";
+
+}
+
+
+// =====================================================
+// EXTRAER ENLACE DEL PRODUCTO
+// =====================================================
+
+function extraerEnlaceProducto(
+    html,
+    nombre
+) {
+
+    const regex =
+        /<a[^>]+href=["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi;
+
+
+    let match;
+
+
+    while (
+        (match =
+            regex.exec(
+                html
+            )) !== null
+    ) {
+
+        const texto =
+            normalizarTexto(
+                stripHTML(
+                    match[2]
+                )
+            );
+
+
+        if (
+            texto ===
+            normalizarTexto(
+                nombre
+            )
+        ) {
+
+            let href =
+                decodeEntities(
+                    match[1]
+                );
+
+
+            if (
+                href.startsWith("/")
+            ) {
+
+                href =
+                    "https://www.sag.gob.cl" +
+                    href;
+
+            }
+
+
+            return href;
+
+        }
+
+    }
+
+
+    return "";
+
+}
+
+
+// =====================================================
+// NORMALIZAR TEXTO
+// =====================================================
+
+function normalizarTexto(
+    texto
+) {
+
+    return String(
+        texto || ""
+    )
+        .normalize(
+            "NFD"
+        )
+        .replace(
+            /[\u0300-\u036f]/g,
+            ""
+        )
+        .toLowerCase()
+        .replace(
+            /[^a-z0-9]+/g,
+            " "
+        )
+        .trim();
+
+}
+
+
+// =====================================================
+// NORMALIZAR HTML
+// =====================================================
+
+function normalizarHTML(
+    html
+) {
+
+    return normalizarTexto(
+        stripHTML(
+            html
+        )
+    );
+
+}
+
+
+// =====================================================
+// STRIP HTML
+// =====================================================
+
+function stripHTML(
+    html
+) {
+
+    return String(
+        html || ""
+    )
+        .replace(
+            /<script[\s\S]*?<\/script>/gi,
+            " "
+        )
+        .replace(
+            /<style[\s\S]*?<\/style>/gi,
+            " "
+        )
+        .replace(
+            /<[^>]+>/g,
+            " "
+        );
+
+}
+
+
+// =====================================================
+// DECODE HTML
+// =====================================================
+
+function decodeEntities(
+    text
+) {
+
+    return String(
+        text || ""
+    )
+        .replace(
+            /&amp;/g,
+            "&"
+        )
+        .replace(
+            /&quot;/g,
+            '"'
+        )
+        .replace(
+            /&#39;/g,
+            "'"
+        )
+        .replace(
+            /&nbsp;/g,
+            " "
+        );
+
+}
+
+
+// =====================================================
+// EXTRAER TEXTO DE OPENROUTER
+// =====================================================
+
+function extractText(
+    data
+) {
 
     const content =
-        data?.choices?.[0]?.message?.content;
+        data?.choices?.[0]
+            ?.message
+            ?.content;
+
 
     if (
         typeof content === "string"
     ) {
+
         return content;
+
     }
 
+
     if (
-        Array.isArray(content)
+        Array.isArray(
+            content
+        )
     ) {
 
         return content
 
             .map(
                 part =>
-                    part?.text || ""
+                    part?.text ||
+                    ""
             )
 
-            .filter(Boolean)
+            .filter(
+                Boolean
+            )
 
             .join("\n");
+
     }
 
+
     return "";
+
 }
 
 
@@ -833,35 +1421,55 @@ function extractText(data) {
 // LIMPIAR JSON
 // =====================================================
 
-function cleanJsonText(text) {
+function cleanJsonText(
+    text
+) {
 
     if (
         typeof text !== "string"
     ) {
+
         return "";
+
     }
+
 
     let limpio =
         text.trim();
 
+
     if (
-        limpio.startsWith("```json")
+        limpio.startsWith(
+            "```json"
+        )
     ) {
 
         limpio =
-            limpio.slice(7);
+            limpio.slice(
+                7
+            );
+
     }
 
+
     if (
-        limpio.startsWith("```")
+        limpio.startsWith(
+            "```"
+        )
     ) {
 
         limpio =
-            limpio.slice(3);
+            limpio.slice(
+                3
+            );
+
     }
 
+
     if (
-        limpio.endsWith("```")
+        limpio.endsWith(
+            "```"
+        )
     ) {
 
         limpio =
@@ -869,9 +1477,12 @@ function cleanJsonText(text) {
                 0,
                 -3
             );
+
     }
 
+
     return limpio.trim();
+
 }
 
 
@@ -887,7 +1498,6 @@ function json(
     return {
 
         statusCode:
-
             statusCode,
 
         headers: {
@@ -897,11 +1507,14 @@ function json(
 
             "Cache-Control":
                 "no-store"
+
         },
 
         body:
             JSON.stringify(
                 body
             )
+
     };
+
 }
