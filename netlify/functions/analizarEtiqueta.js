@@ -1,23 +1,33 @@
 // =====================================================
-// BÍO IA V6
-// analizarEtiqueta.js
+// BÍO IA V7
+// netlify/functions/analizarEtiqueta.js
 // =====================================================
 //
 // FLUJO:
 //
-// 1. Recibe fotografía
-// 2. OpenRouter identifica producto
-// 3. Busca producto en SAG Chile
-// 4. Abre publicación SAG
-// 5. Localiza etiqueta / HDS PDF
-// 6. Lee el documento oficial
-// 7. OpenRouter interpreta la documentación
-// 8. Aplica reglas agronómicas BIO
-// 9. Calcula dosis para 1 / 15 / 100 / 160 L
-// 10. Interpreta 1X = preventivo / 2X = curativo
-// 11. Devuelve JSON compatible con ia.js
+// FOTO
+//  ↓
+// OpenRouter / openrouter/free
+//  ↓
+// Identificación del producto
+//  ↓
+// Búsqueda en SAG Chile
+//  ↓
+// Página oficial del producto
+//  ↓
+// PDF oficial SAG
+//  ↓
+// Jina Reader
+//  ↓
+// OpenRouter interpreta la documentación
+//  ↓
+// Reglas BIO
+//  ↓
+// Cálculos 1 / 15 / 100 / 160 L
+//  ↓
+// JSON para BIO
 //
-// NO utiliza Gemini.
+// NO UTILIZA GEMINI
 //
 // =====================================================
 
@@ -35,46 +45,60 @@ const OPENROUTER_URL =
 const MODELO =
     "openrouter/free";
 
-const SAG_PUBLICACIONES =
-    "https://www.sag.gob.cl/ambitos-de-accion/autorizacion-y-evaluacion-de-plaguicidas/publicaciones";
+const SAG_LIST_URLS = [
 
-const SAG_DOMINIO =
+    "https://www.sag.gob.cl/ambitos-de-accion/insumos-y-productos-silvoagricolas/publicaciones",
+
+    "https://www.sag.gob.cl/ambitos-de-accion/autorizacion-y-evaluacion-de-plaguicidas/publicaciones"
+
+];
+
+const SAG_DOMAIN =
     "https://www.sag.gob.cl";
 
-const JINA_READER =
-    "https://r.jina.ai/http://";
+const JINA_PREFIX =
+    "https://r.jina.ai/";
+
+const TIMEOUT_MS =
+    30000;
 
 const MAX_DOCUMENT_CHARS =
-    70000;
-
-const MAX_PAGE_CHARS =
-    50000;
-
-const REQUEST_TIMEOUT =
-    30000;
+    90000;
 
 
 // =====================================================
-// FUNCIÓN PRINCIPAL
+// HANDLER
 // =====================================================
 
 exports.handler = async (event) => {
 
-    console.log("========================================");
-    console.log("BÍO IA V6 - INICIO");
-    console.log("========================================");
+    console.log(
+        "======================================"
+    );
+
+    console.log(
+        "BÍO IA V7 - INICIO"
+    );
+
+    console.log(
+        "======================================"
+    );
 
 
     // -------------------------------------------------
     // MÉTODO
     // -------------------------------------------------
 
-    if (event.httpMethod !== "POST") {
+    if (
+        event.httpMethod !== "POST"
+    ) {
 
-        return responder(
+        return responseJSON(
             405,
             {
-                ok: false,
+                ok:
+                    false,
+
                 mensaje:
                     "Método no permitido. Utilice POST."
             }
@@ -92,19 +116,25 @@ exports.handler = async (event) => {
         if (!API_KEY) {
 
             console.error(
-                "OPENROUTER_API_KEY no está configurada."
+                "Falta OPENROUTER_API_KEY."
             );
 
-            return responder(
+            return responseJSON(
                 500,
                 {
-                    ok: false,
+
+                    ok:
+                        false,
+
                     mensaje:
                         "No está configurada OPENROUTER_API_KEY en Netlify.",
+
                     proveedor:
                         "OpenRouter",
+
                     modelo:
                         MODELO
+
                 }
             );
 
@@ -116,10 +146,12 @@ exports.handler = async (event) => {
         // -------------------------------------------------
 
         const body =
-            leerBody(event);
+            parseBody(
+                event.body
+            );
 
 
-        let image =
+        let imageBase64 =
             body.image ||
             body.imageBase64 ||
             "";
@@ -130,14 +162,20 @@ exports.handler = async (event) => {
             "";
 
 
-        if (!image) {
+        if (
+            !imageBase64
+        ) {
 
-            return responder(
+            return responseJSON(
                 400,
                 {
-                    ok: false,
+
+                    ok:
+                        false,
+
                     mensaje:
                         "No se recibió ninguna imagen."
+
                 }
             );
 
@@ -153,13 +191,16 @@ exports.handler = async (event) => {
 
 
         if (
-            image.startsWith("data:")
+            imageBase64.startsWith(
+                "data:"
+            )
         ) {
 
             const match =
-                image.match(
+                imageBase64.match(
                     /^data:([^;]+);base64,/
                 );
+
 
             if (
                 match &&
@@ -179,46 +220,68 @@ exports.handler = async (event) => {
         // -------------------------------------------------
 
         if (
-            image.includes(",")
+            imageBase64.includes(",")
         ) {
 
-            image =
-                image.split(",")[1];
+            imageBase64 =
+                imageBase64.split(",")[1];
+
+        }
+
+
+        if (
+            !mimeType.startsWith(
+                "image/"
+            )
+        ) {
+
+            return responseJSON(
+                400,
+                {
+
+                    ok:
+                        false,
+
+                    mensaje:
+                        `Tipo de imagen no soportado: ${mimeType}`
+
+                }
+            );
 
         }
 
 
         console.log(
-            "Imagen recibida:",
+            "Imagen:",
             mimeType
         );
 
         console.log(
-            "Tamaño Base64:",
-            image.length
+            "Base64:",
+            imageBase64.length
         );
 
 
-        // -------------------------------------------------
+        // =================================================
         // ETAPA 1
         // IDENTIFICACIÓN VISUAL
-        // -------------------------------------------------
+        // =================================================
 
         console.log(
-            "ETAPA 1: Identificando producto..."
+            "ETAPA 1: identificación visual"
         );
 
 
         const identificacion =
             await identificarProducto(
-                image,
+                imageBase64,
                 mimeType,
                 promptOriginal
             );
 
 
         console.log(
-            "Producto:",
+            "Producto identificado:",
             identificacion.nombre
         );
 
@@ -233,34 +296,44 @@ exports.handler = async (event) => {
         );
 
 
-        // -------------------------------------------------
+        // =================================================
         // ETAPA 2
-        // BUSCAR SAG
-        // -------------------------------------------------
+        // BÚSQUEDA SAG
+        // =================================================
 
         console.log(
-            "ETAPA 2: Buscando producto en SAG..."
+            "ETAPA 2: búsqueda SAG"
         );
 
 
         const sag =
-            await buscarEnSAG(
+            await buscarSAG(
                 identificacion
             );
 
 
         console.log(
-            "SAG:",
-            JSON.stringify(
-                sag
-            )
+            "SAG encontrado:",
+            sag.encontrado
+        );
+
+        console.log(
+            "Producto URL:",
+            sag.productUrl ||
+                ""
+        );
+
+        console.log(
+            "PDF URL:",
+            sag.pdfUrl ||
+                ""
         );
 
 
-        // -------------------------------------------------
+        // =================================================
         // ETAPA 3
-        // OBTENER DOCUMENTO
-        // -------------------------------------------------
+        // LEER DOCUMENTO
+        // =================================================
 
         let documento =
             "";
@@ -275,7 +348,7 @@ exports.handler = async (event) => {
         ) {
 
             console.log(
-                "ETAPA 3: Leyendo PDF SAG..."
+                "ETAPA 3: leyendo PDF oficial SAG"
             );
 
 
@@ -292,7 +365,7 @@ exports.handler = async (event) => {
 
 
         // -------------------------------------------------
-        // FALLBACK: PÁGINA SAG
+        // FALLBACK: página SAG
         // -------------------------------------------------
 
         if (
@@ -301,7 +374,7 @@ exports.handler = async (event) => {
         ) {
 
             console.log(
-                "No se pudo leer PDF. Intentando página SAG..."
+                "PDF no disponible. Leyendo página SAG."
             );
 
 
@@ -317,20 +390,26 @@ exports.handler = async (event) => {
         }
 
 
-        // -------------------------------------------------
+        console.log(
+            "Caracteres de documento:",
+            documento.length
+        );
+
+
+        // =================================================
         // ETAPA 4
-        // INTERPRETACIÓN DOCUMENTAL
-        // -------------------------------------------------
+        // INTERPRETAR DOCUMENTACIÓN
+        // =================================================
 
         let datos;
 
 
         if (
-            documento
+            documento.length > 0
         ) {
 
             console.log(
-                "ETAPA 4: Interpretando documentación oficial..."
+                "ETAPA 4: interpretación del documento"
             );
 
 
@@ -344,7 +423,7 @@ exports.handler = async (event) => {
         } else {
 
             console.log(
-                "No se obtuvo documento SAG."
+                "No se pudo obtener documentación."
             );
 
 
@@ -356,13 +435,13 @@ exports.handler = async (event) => {
         }
 
 
-        // -------------------------------------------------
+        // =================================================
         // ETAPA 5
         // REGLAS BIO
-        // -------------------------------------------------
+        // =================================================
 
         console.log(
-            "ETAPA 5: Aplicando reglas BIO..."
+            "ETAPA 5: reglas BIO"
         );
 
 
@@ -373,48 +452,45 @@ exports.handler = async (event) => {
             );
 
 
-        // -------------------------------------------------
+        // =================================================
         // ETAPA 6
-        // DOSIS
-        // -------------------------------------------------
+        // CÁLCULO DOSIS
+        // =================================================
 
         console.log(
-            "ETAPA 6: Construyendo dosis BIO..."
+            "ETAPA 6: cálculo dosis"
         );
 
 
         datos.dosis =
             construirDosisBIO(
-                datos.dosis
+                datos.dosis,
+                datos.mojamiento
             );
 
 
-        // -------------------------------------------------
-        // FUENTE
-        // -------------------------------------------------
+        // =================================================
+        // FUENTES
+        // =================================================
 
         datos.observaciones =
-            agregarFuente(
+            agregarFuentes(
                 datos.observaciones,
                 sag,
                 documentoURL
             );
 
 
-        // -------------------------------------------------
-        // LOG FINAL
-        // -------------------------------------------------
+        // =================================================
+        // RESULTADO
+        // =================================================
 
         console.log(
-            "========================================"
+            "======================================"
         );
 
         console.log(
-            "BÍO IA V6 - RESULTADO"
-        );
-
-        console.log(
-            "========================================"
+            "BÍO IA V7 - RESULTADO"
         );
 
         console.log(
@@ -423,12 +499,12 @@ exports.handler = async (event) => {
             )
         );
 
+        console.log(
+            "======================================"
+        );
 
-        // -------------------------------------------------
-        // RESPUESTA
-        // -------------------------------------------------
 
-        return responder(
+        return responseJSON(
             200,
             {
 
@@ -442,6 +518,7 @@ exports.handler = async (event) => {
                     MODELO,
 
                 modelo_utilizado:
+                    identificacion.modelo_utilizado ||
                     null,
 
                 fuente:
@@ -467,11 +544,11 @@ exports.handler = async (event) => {
     } catch (error) {
 
         console.error(
-            "========================================"
+            "======================================"
         );
 
         console.error(
-            "ERROR BÍO IA V6"
+            "ERROR BÍO IA V7"
         );
 
         console.error(
@@ -479,11 +556,11 @@ exports.handler = async (event) => {
         );
 
         console.error(
-            "========================================"
+            "======================================"
         );
 
 
-        return responder(
+        return responseJSON(
             500,
             {
 
@@ -509,75 +586,49 @@ exports.handler = async (event) => {
 
 
 // =====================================================
-// LEER BODY
-// =====================================================
-
-function leerBody(
-    event
-) {
-
-    try {
-
-        return JSON.parse(
-            event.body ||
-            "{}"
-        );
-
-    } catch {
-
-        throw new Error(
-            "El cuerpo de la solicitud no contiene JSON válido."
-        );
-
-    }
-
-}
-
-
-// =====================================================
-// ETAPA 1
-// IDENTIFICAR PRODUCTO
+// IDENTIFICACIÓN VISUAL
 // =====================================================
 
 async function identificarProducto(
-    image,
+    imageBase64,
     mimeType,
     promptOriginal
 ) {
 
     const prompt = `
 
-Eres BÍO IA, especialista en protección vegetal
-y productos agrícolas utilizados en Chile.
+Eres BÍO IA, especialista en productos
+fitosanitarios agrícolas de Chile.
 
-Analiza cuidadosamente la fotografía.
+Analiza la imagen.
 
-TU OBJETIVO PRINCIPAL ES IDENTIFICAR EL PRODUCTO.
+Tu objetivo principal es identificar
+el producto comercial.
 
-NO INVENTES DATOS.
+NO INVENTES INFORMACIÓN.
 
-Identifica, cuando sea visible:
+Busca:
 
 - nombre comercial
+- fabricante
 - ingrediente activo
 - concentración
 - formulación
-- fabricante
-- distribuidor
-- registro
+- registro SAG
 - contenido
+- tipo de producto
 - función
 - plagas
 - cultivos
-- modo de acción
+- modo de acción visible
 
-IMPORTANTE SOBRE MODO DE ACCIÓN:
+IMPORTANTE:
 
 Si la etiqueta dice:
 
 "actividad sistémica"
 
-devuelve:
+debes devolver:
 
 "Sistémico"
 
@@ -585,7 +636,7 @@ Si dice:
 
 "acción de contacto"
 
-devuelve:
+debes devolver:
 
 "Contacto"
 
@@ -593,20 +644,22 @@ Si dice:
 
 "acción de ingestión"
 
-devuelve:
+debes devolver:
 
 "Ingestión"
 
-Si indica más de uno,
-devuelve todos.
+Si aparecen varias acciones,
+devuelve todas.
 
-NO inventes dosis.
+NO inventes:
 
-NO inventes carencia.
+- dosis
+- carencia
+- reentrada
 
-NO inventes reentrada.
+cuando no sean visibles.
 
-Devuelve EXCLUSIVAMENTE JSON válido.
+Devuelve exclusivamente JSON válido.
 
 ESTRUCTURA:
 
@@ -635,13 +688,11 @@ ESTRUCTURA:
   "observaciones": ""
 }
 
-Cuando algo no sea visible:
+Si no puedes identificar un dato:
 
-texto:
-"No encontrado"
+texto = "No encontrado"
 
-array:
-[]
+array = []
 
 Información adicional:
 
@@ -650,7 +701,7 @@ ${promptOriginal}
 `;
 
 
-    const data =
+    const resultado =
         await llamarOpenRouter(
             prompt,
             [
@@ -661,10 +712,8 @@ ${promptOriginal}
 
                     image_url:
                     {
-
                         url:
-                            `data:${mimeType};base64,${image}`
-
+                            `data:${mimeType};base64,${imageBase64}`
                     }
 
                 }
@@ -674,29 +723,36 @@ ${promptOriginal}
 
     const texto =
         extraerTexto(
-            data
+            resultado.data
         );
 
 
-    const resultado =
+    const datos =
         parsearJSON(
             texto
         );
 
 
-    return normalizarDatos(
-        resultado
-    );
+    const normalizados =
+        normalizarDatos(
+            datos
+        );
+
+
+    normalizados.modelo_utilizado =
+        resultado.modelo;
+
+
+    return normalizados;
 
 }
 
 
 // =====================================================
-// ETAPA 2
-// BUSCAR EN SAG
+// BÚSQUEDA SAG
 // =====================================================
 
-async function buscarEnSAG(
+async function buscarSAG(
     identificacion
 ) {
 
@@ -706,21 +762,22 @@ async function buscarEnSAG(
         );
 
 
-    const ingrediente =
-        limpiar(
-            identificacion.ingrediente_activo
-        );
-
-
     const registro =
         limpiar(
             identificacion.registro
         );
 
 
+    const ingrediente =
+        limpiar(
+            identificacion.ingrediente_activo
+        );
+
+
     if (
         !nombre ||
-        nombre === "No encontrado"
+        normalizarTexto(nombre) ===
+            "no encontrado"
     ) {
 
         return {
@@ -729,231 +786,380 @@ async function buscarEnSAG(
                 false,
 
             mensaje:
-                "No existe nombre comercial suficiente para buscar en SAG."
+                "No existe nombre comercial para buscar."
 
         };
 
     }
 
 
-    try {
+    const consultas =
+        [];
 
-        // -------------------------------------------------
-        // PRIMERA BÚSQUEDA:
-        // NOMBRE COMERCIAL
-        // -------------------------------------------------
 
-        const resultadosNombre =
-            await buscarPublicacionesSAG(
-                nombre
+    // -------------------------------------------------
+    // Nombre completo
+    // -------------------------------------------------
+
+    consultas.push(
+        nombre
+    );
+
+
+    // -------------------------------------------------
+    // Nombre sin concentración / formulación
+    // Ej:
+    // ORTHENE 75 SP -> ORTHENE
+    // -------------------------------------------------
+
+    const nombreBase =
+        nombre
+            .replace(
+                /\b\d+(?:[.,]\d+)?\s*(?:%|WG|WP|SC|SL|EC|SP|SG|FS|SE|EW|OD|CS|ME|GR)\b/gi,
+                ""
+            )
+            .replace(
+                /\s+/g,
+                " "
+            )
+            .trim();
+
+
+    if (
+        nombreBase &&
+        normalizarTexto(
+            nombreBase
+        ) !==
+        normalizarTexto(
+            nombre
+        )
+    ) {
+
+        consultas.push(
+            nombreBase
+        );
+
+    }
+
+
+    // -------------------------------------------------
+    // Registro
+    // -------------------------------------------------
+
+    if (
+        registro &&
+        normalizarTexto(registro) !==
+            "no encontrado"
+    ) {
+
+        consultas.push(
+            registro
+        );
+
+    }
+
+
+    // -------------------------------------------------
+    // Buscar cada consulta
+    // -------------------------------------------------
+
+    for (
+        const termino
+        of consultas
+    ) {
+
+        console.log(
+            "SAG buscando:",
+            termino
+        );
+
+
+        const resultados =
+            await consultarListadosSAG(
+                termino
             );
 
 
         console.log(
-            "Resultados SAG por nombre:",
-            resultadosNombre.length
+            "Resultados encontrados:",
+            resultados.length
         );
 
 
-        let coincidencia =
-            seleccionarMejorResultadoSAG(
-                resultadosNombre,
+        const mejor =
+            elegirResultadoSAG(
+                resultados,
                 nombre,
                 registro,
                 ingrediente
             );
 
 
-        // -------------------------------------------------
-        // SEGUNDA BÚSQUEDA:
-        // SI NO HAY RESULTADO
-        // BUSCAR POR REGISTRO
-        // -------------------------------------------------
-
         if (
-            !coincidencia &&
-            registro &&
-            registro !== "No encontrado"
+            mejor
         ) {
 
-            const resultadosRegistro =
-                await buscarPublicacionesSAG(
-                    registro
+            console.log(
+                "Mejor resultado SAG:",
+                mejor.titulo
+            );
+
+
+            // -------------------------------------------------
+            // Abrir página individual
+            // -------------------------------------------------
+
+            let pagina =
+                "";
+
+
+            try {
+
+                pagina =
+                    await fetchText(
+                        mejor.url
+                    );
+
+            } catch (
+                error
+            ) {
+
+                console.error(
+                    "No se pudo abrir página SAG:",
+                    error
+                );
+
+            }
+
+
+            // -------------------------------------------------
+            // Buscar PDF
+            // -------------------------------------------------
+
+            let pdfUrl =
+                encontrarPDF(
+                    pagina
                 );
 
 
-            coincidencia =
-                seleccionarMejorResultadoSAG(
-                    resultadosRegistro,
-                    nombre,
-                    registro,
-                    ingrediente
-                );
+            // -------------------------------------------------
+            // Si no aparece PDF en HTML normal,
+            // leer página con Jina y buscar PDF.
+            // -------------------------------------------------
 
-        }
+            if (
+                !pdfUrl
+            ) {
 
+                try {
 
-        // -------------------------------------------------
-        // TERCERA BÚSQUEDA:
-        // NOMBRE + INGREDIENTE
-        // -------------------------------------------------
-
-        if (
-            !coincidencia &&
-            ingrediente &&
-            ingrediente !== "No encontrado"
-        ) {
-
-            const resultadosCombinados =
-                await buscarPublicacionesSAG(
-                    `${nombre} ${ingrediente}`
-                );
+                    const paginaJina =
+                        await fetchText(
+                            construirJinaURL(
+                                mejor.url
+                            )
+                        );
 
 
-            coincidencia =
-                seleccionarMejorResultadoSAG(
-                    resultadosCombinados,
-                    nombre,
-                    registro,
-                    ingrediente
-                );
+                    pdfUrl =
+                        encontrarPDF(
+                            paginaJina
+                        );
 
-        }
+                } catch (
+                    error
+                ) {
 
+                    console.error(
+                        "Jina no pudo leer página SAG:",
+                        error
+                    );
 
-        if (
-            !coincidencia
-        ) {
+                }
+
+            }
+
 
             return {
 
                 encontrado:
-                    false,
+                    true,
 
                 productoBuscado:
                     nombre,
 
-                mensaje:
-                    "No se encontró una publicación coincidente en SAG."
+                titulo:
+                    mejor.titulo,
+
+                productUrl:
+                    mejor.url,
+
+                pdfUrl:
+                    pdfUrl ||
+                    "",
+
+                empresa:
+                    mejor.empresa ||
+                    "",
+
+                ano:
+                    mejor.ano ||
+                    "",
+
+                fuente:
+                    "SAG Chile"
 
             };
 
         }
 
-
-        // -------------------------------------------------
-        // LEER PÁGINA DEL PRODUCTO
-        // -------------------------------------------------
-
-        let pagina =
-            "";
-
-
-        if (
-            coincidencia.url
-        ) {
-
-            pagina =
-                await fetchText(
-                    coincidencia.url
-                );
-
-        }
-
-
-        // -------------------------------------------------
-        // BUSCAR PDF
-        // -------------------------------------------------
-
-        const pdfUrl =
-            encontrarPDF(
-                pagina
-            );
-
-
-        return {
-
-            encontrado:
-                true,
-
-            producto:
-                coincidencia.titulo,
-
-            productUrl:
-                coincidencia.url,
-
-            pdfUrl:
-                pdfUrl,
-
-            empresa:
-                coincidencia.empresa,
-
-            ano:
-                coincidencia.ano,
-
-            fuente:
-                "SAG Chile"
-
-        };
-
-
-    } catch (error) {
-
-        console.error(
-            "Error SAG:",
-            error
-        );
-
-
-        return {
-
-            encontrado:
-                false,
-
-            mensaje:
-                "No fue posible consultar SAG.",
-
-            error:
-                error?.message ||
-                String(error)
-
-        };
-
     }
+
+
+    return {
+
+        encontrado:
+            false,
+
+        productoBuscado:
+            nombre,
+
+        mensaje:
+            "No se encontró una publicación coincidente en SAG Chile."
+
+    };
 
 }
 
 
 // =====================================================
-// BUSCAR PUBLICACIONES SAG
+// CONSULTAR LISTADOS SAG
 // =====================================================
 
-async function buscarPublicacionesSAG(
+async function consultarListadosSAG(
     termino
 ) {
 
-    const url =
-        SAG_PUBLICACIONES +
-        "?title=" +
-        encodeURIComponent(
-            termino
-        );
+    const resultados =
+        [];
 
 
-    console.log(
-        "Consulta SAG:",
-        url
+    for (
+        const baseURL
+        of SAG_LIST_URLS
+    ) {
+
+        try {
+
+            const url =
+                construirURLBusquedaSAG(
+                    baseURL,
+                    termino
+                );
+
+
+            console.log(
+                "Consultando:",
+                url
+            );
+
+
+            const html =
+                await fetchText(
+                    url
+                );
+
+
+            const encontrados =
+                extraerResultadosSAG(
+                    html
+                );
+
+
+            resultados.push(
+                ...encontrados
+            );
+
+        } catch (
+            error
+        ) {
+
+            console.error(
+                "Error listado SAG:",
+                error
+            );
+
+        }
+
+    }
+
+
+    return eliminarDuplicadosSAG(
+        resultados
+    );
+
+}
+
+
+// =====================================================
+// CONSTRUIR URL DE BÚSQUEDA SAG
+// =====================================================
+
+function construirURLBusquedaSAG(
+    baseURL,
+    termino
+) {
+
+    const params =
+        new URLSearchParams();
+
+
+    params.set(
+        "field_fecha_otros_value",
+        ""
     );
 
 
-    const html =
-        await fetchText(
-            url
-        );
+    params.set(
+        "field_tema_otros_documentos_target_id",
+        "All"
+    );
 
 
-    return extraerResultadosSAG(
-        html
+    params.set(
+        "field_tipo_de_publicacion_target_id",
+        "All"
+    );
+
+
+    params.set(
+        "order",
+        "field_fecha_otros"
+    );
+
+
+    params.set(
+        "sort",
+        "desc"
+    );
+
+
+    params.set(
+        "page",
+        "0"
+    );
+
+
+    params.set(
+        "title",
+        termino
+    );
+
+
+    return (
+        baseURL +
+        "?" +
+        params.toString()
     );
 
 }
@@ -967,18 +1173,22 @@ function extraerResultadosSAG(
     html
 ) {
 
+    const resultados =
+        [];
+
+
     if (
         !html
     ) {
 
-        return [];
+        return resultados;
 
     }
 
 
-    const resultados =
-        [];
-
+    // -------------------------------------------------
+    // Enlaces normales
+    // -------------------------------------------------
 
     const regex =
         /<a[^>]+href=["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi;
@@ -995,7 +1205,7 @@ function extraerResultadosSAG(
     ) {
 
         const href =
-            convertirURL(
+            convertirURLSAG(
                 decodeHTML(
                     match[1]
                 )
@@ -1021,7 +1231,7 @@ function extraerResultadosSAG(
 
         if (
             href.includes(
-                "sag.gob.cl/content/"
+                "/content/"
             )
         ) {
 
@@ -1048,18 +1258,16 @@ function extraerResultadosSAG(
     }
 
 
-    return eliminarDuplicados(
-        resultados
-    );
+    return resultados;
 
 }
 
 
 // =====================================================
-// SELECCIONAR MEJOR RESULTADO SAG
+// ELEGIR MEJOR RESULTADO SAG
 // =====================================================
 
-function seleccionarMejorResultadoSAG(
+function elegirResultadoSAG(
     resultados,
     nombre,
     registro,
@@ -1067,9 +1275,6 @@ function seleccionarMejorResultadoSAG(
 ) {
 
     if (
-        !Array.isArray(
-            resultados
-        ) ||
         resultados.length === 0
     ) {
 
@@ -1099,19 +1304,18 @@ function seleccionarMejorResultadoSAG(
     let mejor =
         null;
 
-
-    let mejorPuntaje =
+    let mayorPuntaje =
         0;
 
 
     for (
-        const resultado
+        const item
         of resultados
     ) {
 
         const tituloN =
             normalizarTexto(
-                resultado.titulo
+                item.titulo
             );
 
 
@@ -1119,7 +1323,7 @@ function seleccionarMejorResultadoSAG(
             0;
 
 
-        // Coincidencia exacta
+        // Nombre exacto
         if (
             tituloN ===
             nombreN
@@ -1151,7 +1355,7 @@ function seleccionarMejorResultadoSAG(
         ) {
 
             puntaje +=
-                30;
+                40;
 
         }
 
@@ -1159,14 +1363,15 @@ function seleccionarMejorResultadoSAG(
         // Registro
         if (
             registroN &&
-            registroN !== "no encontrado" &&
+            registroN !==
+                "no encontrado" &&
             tituloN.includes(
                 registroN
             )
         ) {
 
             puntaje +=
-                30;
+                50;
 
         }
 
@@ -1174,28 +1379,29 @@ function seleccionarMejorResultadoSAG(
         // Ingrediente
         if (
             ingredienteN &&
-            ingredienteN !== "no encontrado" &&
+            ingredienteN !==
+                "no encontrado" &&
             tituloN.includes(
                 ingredienteN
             )
         ) {
 
             puntaje +=
-                10;
+                20;
 
         }
 
 
         if (
             puntaje >
-            mejorPuntaje
+            mayorPuntaje
         ) {
 
-            mejorPuntaje =
+            mayorPuntaje =
                 puntaje;
 
             mejor =
-                resultado;
+                item;
 
         }
 
@@ -1224,9 +1430,12 @@ function encontrarPDF(
     }
 
 
-    // Buscar cualquier href terminado en PDF
+    // -------------------------------------------------
+    // href directo
+    // -------------------------------------------------
+
     const regex =
-        /href=["']([^"']+\.pdf(?:\?[^"']*)?)["']/gi;
+        /href\s*=\s*["']([^"']+\.pdf(?:\?[^"']*)?)["']/gi;
 
 
     let match;
@@ -1236,10 +1445,10 @@ function encontrarPDF(
         (match =
             regex.exec(
                 html
-            )) !== null
+            ))
     ) {
 
-        return convertirURL(
+        return convertirURLSAG(
             decodeHTML(
                 match[1]
             )
@@ -1248,26 +1457,29 @@ function encontrarPDF(
     }
 
 
-    // Algunos sitios usan mayúsculas
-    const regex2 =
-        /href=["']([^"']+\.PDF(?:\?[^"']*)?)["']/g;
+    // -------------------------------------------------
+    // texto que contiene ".pdf"
+    // -------------------------------------------------
+
+    const regexTexto =
+        /https?:\/\/[^\s"'<>]+\.pdf(?:\?[^\s"'<>]*)?/gi;
 
 
-    const match2 =
-        regex2.exec(
-            html
+    const encontradoTexto =
+        html.match(
+            regexTexto
         );
 
 
     if (
-        match2
+        encontradoTexto &&
+        encontradoTexto[0]
     ) {
 
-        return convertirURL(
+        return
             decodeHTML(
-                match2[1]
-            )
-        );
+                encontradoTexto[0]
+            );
 
     }
 
@@ -1297,13 +1509,13 @@ async function leerDocumento(
     try {
 
         console.log(
-            "Documento:",
+            "Leyendo documento:",
             url
         );
 
 
         // -------------------------------------------------
-        // PDF
+        // PDF → Jina Reader
         // -------------------------------------------------
 
         if (
@@ -1318,18 +1530,31 @@ async function leerDocumento(
                 );
 
 
+            console.log(
+                "Jina:",
+                jinaURL
+            );
+
+
             const texto =
                 await fetchText(
                     jinaURL
                 );
 
 
-            return texto
-                ? texto.slice(
+            if (
+                texto
+            ) {
+
+                return texto.slice(
                     0,
                     MAX_DOCUMENT_CHARS
-                )
-                : "";
+                );
+
+            }
+
+
+            return "";
 
         }
 
@@ -1353,21 +1578,22 @@ async function leerDocumento(
         }
 
 
-        const texto =
-            stripHTML(
-                html
+        return stripHTML(
+            html
+        )
+            .replace(
+                /\s+/g,
+                " "
+            )
+            .trim()
+            .slice(
+                0,
+                MAX_DOCUMENT_CHARS
             );
 
-
-        return limpiarEspacios(
-            texto
-        ).slice(
-            0,
-            MAX_PAGE_CHARS
-        );
-
-
-    } catch (error) {
+    } catch (
+        error
+    ) {
 
         console.error(
             "Error leyendo documento:",
@@ -1390,23 +1616,15 @@ function construirJinaURL(
     url
 ) {
 
-    const limpio =
-        url.replace(
-            /^https?:\/\//i,
-            ""
-        );
-
-
     return (
-        "https://r.jina.ai/http://" +
-        limpio
+        JINA_PREFIX +
+        url
     );
 
 }
 
 
 // =====================================================
-// ETAPA 4
 // INTERPRETAR DOCUMENTACIÓN
 // =====================================================
 
@@ -1416,72 +1634,41 @@ async function interpretarDocumento(
     promptOriginal
 ) {
 
+    const texto =
+        documento.slice(
+            0,
+            MAX_DOCUMENT_CHARS
+        );
+
+
     const prompt = `
 
-Eres BÍO IA, especialista en fitosanidad,
-protección vegetal y uso de productos agrícolas
-en Chile.
+Eres BÍO IA, especialista en protección
+vegetal y uso de productos agrícolas en Chile.
 
-Tienes una identificación inicial del producto
-y una documentación obtenida desde SAG Chile.
+Has recibido:
 
-Debes completar la información utilizando
-PRIORITARIAMENTE el documento oficial.
+1. Identificación inicial desde una fotografía.
+2. Documento oficial obtenido desde SAG Chile.
 
-=========================================
-REGLA FUNDAMENTAL
-=========================================
+La información del documento oficial tiene
+PRIORIDAD sobre la inferencia de la imagen.
 
 NO INVENTES.
 
-Cuando un dato no esté respaldado:
-
-"No encontrado"
-
 =========================================
-PRIORIDAD
+PRIORIDAD DE FUENTES
 =========================================
 
 1. Etiqueta oficial SAG.
 2. HDS/documentación oficial SAG.
-3. Información visible de la fotografía.
-
-=========================================
-CRISANTEMO Y FLORES
-=========================================
-
-Si la aplicación trabaja con CRISANTEMO:
-
-1. Buscar primero:
-   - crisantemo
-   - flores
-   - ornamentales
-
-2. Si no existe recomendación específica,
-   utilizar HORTALIZAS / VERDURAS como
-   referencia agronómica BIO.
-
-3. Nunca utilizar:
-   - árboles
-   - vides
-
-MUY IMPORTANTE:
-
-Si se utiliza hortalizas como referencia,
-debe indicarse:
-
-"Referencia agronómica BIO tomada de hortalizas
-por ausencia de recomendación específica para
-crisantemo/flores."
-
-Esto NO debe presentarse como autorización SAG
-para crisantemo.
+3. Imagen original.
 
 =========================================
 MODO DE ACCIÓN
 =========================================
 
-Buscar expresamente:
+Busca explícitamente:
 
 - sistémico
 - contacto
@@ -1493,32 +1680,82 @@ Buscar expresamente:
 - erradicante
 - residual
 
-Si la etiqueta dice:
+Si el documento dice:
 
 "actividad sistémica"
 
 → "Sistémico"
 
-Si dice:
-
-"acción de contacto"
+Si dice acción de contacto:
 
 → "Contacto"
 
-Si dice:
-
-"acción de ingestión"
+Si dice acción de ingestión:
 
 → "Ingestión"
 
-Si existen varios,
-devolver todos.
+Conserva todas las acciones encontradas.
 
-También buscar:
+Busca también:
 
 - IRAC
 - FRAC
 - HRAC
+
+=========================================
+CRISANTEMO
+=========================================
+
+Para la aplicación BIO:
+
+1. Buscar primero crisantemo.
+2. Luego flores/ornamentales.
+3. Si no existe una recomendación específica,
+   utilizar HORTALIZAS/VERDURAS como referencia
+   agronómica BIO.
+4. NUNCA utilizar árboles o vides como referencia.
+
+MUY IMPORTANTE:
+
+La referencia de hortalizas no debe presentarse
+como autorización SAG específica para crisantemo.
+
+Indicar en observaciones:
+
+"Referencia agronómica BIO tomada de hortalizas
+por ausencia de recomendación específica para
+crisantemo/flores."
+
+=========================================
+CARENCIA
+=========================================
+
+Buscar la carencia en el documento.
+
+Prioridad:
+
+1. cultivo específico
+2. flores/ornamentales
+3. condición de invernadero
+4. recomendación general
+
+Si no existe:
+
+"No encontrado"
+
+=========================================
+REINGRESO
+=========================================
+
+Buscar explícitamente el tiempo de reingreso.
+
+Prioridad:
+
+1. invernadero
+2. cultivo específico
+3. general
+
+No confundir reingreso con carencia.
 
 =========================================
 DOSIS
@@ -1526,7 +1763,7 @@ DOSIS
 
 Extrae exactamente la dosis oficial.
 
-Puede estar expresada como:
+Puede estar en:
 
 - g/100 L
 - kg/100 L
@@ -1537,7 +1774,7 @@ Puede estar expresada como:
 - mL/ha
 - L/ha
 
-NO asumir una unidad distinta.
+No cambies la unidad.
 
 =========================================
 1X / 2X
@@ -1545,108 +1782,65 @@ NO asumir una unidad distinta.
 
 REGLA BIO:
 
-1X = PREVENTIVO = presión baja
+1X = Preventivo = presión baja
 
-2X = CURATIVO = presión alta
+2X = Curativo = presión alta
 
-Si el documento dice:
+Si la documentación dice:
 
 1X–2X
 
-interpretar:
+interpreta:
 
-1X → Preventivo
+1X → preventivo
+2X → curativo
 
-2X → Curativo
+Si la documentación dice:
 
-Si el documento dice que la dosis mayor
-se utiliza para alta presión de plaga,
-puede relacionarse:
+"utilizar la dosis mayor
+con alta presión"
+
+entonces:
 
 dosis menor → presión baja / preventivo
-
 dosis mayor → presión alta / curativo
 
-Pero NO inventes esta relación si el documento
+No inventes la relación si el documento
 no la respalda.
-
-=========================================
-CARRENCIA
-=========================================
-
-Prioridad:
-
-1. cultivo específico
-2. flores / ornamentales
-3. invernadero
-4. otro dato oficial aplicable
-
-No confundir carencia con reingreso.
-
-=========================================
-REINGRESO
-=========================================
-
-Prioridad:
-
-1. invernadero
-2. cultivo específico
-3. general
 
 =========================================
 DOSIS PARA BIO
 =========================================
 
-La aplicación debe entregar referencias para:
+Cuando la dosis esté expresada por 100 L,
+mantén la dosis oficial y prepara cálculos para:
 
 1 L
 15 L
 100 L
 160 L
 
-Si la dosis es por 100 L:
+Ejemplo:
 
 30 g/100 L
-
-entonces:
 
 1 L = 0,30 g
 15 L = 4,50 g
 100 L = 30 g
 160 L = 48 g
 
-Si es un rango,
-mantener el rango.
+Si existe un rango, conserva el rango.
 
-Si la dosis es por hectárea,
-NO convertir directamente a litros
-sin disponer del mojamiento oficial.
+Si la dosis es por hectárea:
 
-=========================================
-PRODUCTO IDENTIFICADO
-=========================================
-
-${JSON.stringify(
-    identificacion
-)}
-
-=========================================
-DOCUMENTACIÓN SAG
-=========================================
-
-${documento}
-
-=========================================
-INFORMACIÓN ADICIONAL
-=========================================
-
-${promptOriginal}
+NO convertir automáticamente sin disponer
+del mojamiento oficial necesario.
 
 =========================================
 RESPUESTA
 =========================================
 
-Devuelve EXCLUSIVAMENTE JSON válido:
+Devuelve EXCLUSIVAMENTE JSON válido.
 
 {
   "tipo_registro": "",
@@ -1673,26 +1867,44 @@ Devuelve EXCLUSIVAMENTE JSON válido:
   "observaciones": ""
 }
 
+=========================================
+IDENTIFICACIÓN
+=========================================
+
+${JSON.stringify(
+    identificacion
+)}
+
+=========================================
+DOCUMENTO SAG
+=========================================
+
+${texto}
+
+=========================================
+INSTRUCCIONES ADICIONALES
+=========================================
+
+${promptOriginal}
+
 `;
 
 
-    const data =
+    const resultado =
         await llamarOpenRouter(
             prompt,
             []
         );
 
 
-    const texto =
+    const respuestaTexto =
         extraerTexto(
-            data
+            resultado.data
         );
 
 
-    return normalizarDatos(
-        parsearJSON(
-            texto
-        )
+    return parsearJSON(
+        respuestaTexto
     );
 
 }
@@ -1707,13 +1919,15 @@ function aplicarReglasBIO(
     documento
 ) {
 
-    // -------------------------------------------------
-    // TEXTO DOCUMENTAL
-    // -------------------------------------------------
+    datos =
+        normalizarDatos(
+            datos
+        );
+
 
     const doc =
         normalizarTexto(
-            documento || ""
+            documento
         );
 
 
@@ -1721,7 +1935,7 @@ function aplicarReglasBIO(
     // MODO DE ACCIÓN
     // -------------------------------------------------
 
-    let acciones =
+    const acciones =
         Array.isArray(
             datos.modo_accion
         )
@@ -1729,32 +1943,33 @@ function aplicarReglasBIO(
             : [];
 
 
-    const agregarAccion =
-        (accion) => {
+    function agregarAccion(
+        accion
+    ) {
 
-            const existe =
-                acciones.some(
-                    x =>
-                        normalizarTexto(
-                            x
-                        ) ===
-                        normalizarTexto(
-                            accion
-                        )
-                );
+        const existe =
+            acciones.some(
+                x =>
+                    normalizarTexto(
+                        x
+                    ) ===
+                    normalizarTexto(
+                        accion
+                    )
+            );
 
 
-            if (
-                !existe
-            ) {
+        if (
+            !existe
+        ) {
 
-                acciones.push(
-                    accion
-                );
+            acciones.push(
+                accion
+            );
 
-            }
+        }
 
-        };
+    }
 
 
     if (
@@ -1782,9 +1997,6 @@ function aplicarReglasBIO(
         ) ||
         doc.includes(
             "accion contacto"
-        ) ||
-        doc.includes(
-            "de contacto"
         )
     ) {
 
@@ -1800,10 +2012,7 @@ function aplicarReglasBIO(
             "accion de ingestion"
         ) ||
         doc.includes(
-            "accion de ingestión"
-        ) ||
-        doc.includes(
-            "de ingestión"
+            "de ingestion"
         )
     ) {
 
@@ -1827,32 +2036,6 @@ function aplicarReglasBIO(
     }
 
 
-    if (
-        doc.includes(
-            "preventivo"
-        )
-    ) {
-
-        agregarAccion(
-            "Preventivo"
-        );
-
-    }
-
-
-    if (
-        doc.includes(
-            "curativo"
-        )
-    ) {
-
-        agregarAccion(
-            "Curativo"
-        );
-
-    }
-
-
     datos.modo_accion =
         acciones;
 
@@ -1861,58 +2044,47 @@ function aplicarReglasBIO(
     // 1X / 2X
     // -------------------------------------------------
 
-    const dosisOriginal =
-        String(
-            datos.dosis ||
-            ""
-        );
-
-
-    let dosisBIO =
-        dosisOriginal;
-
-
     if (
         /1\s*x/i.test(
-            dosisOriginal
+            datos.dosis
         ) ||
         /2\s*x/i.test(
-            dosisOriginal
+            datos.dosis
         )
     ) {
 
         if (
-            !/preventivo/i.test(
-                dosisBIO
+            !normalizarTexto(
+                datos.dosis
+            ).includes(
+                "preventivo"
             )
         ) {
 
-            dosisBIO +=
-                " | 1X = Preventivo";
+            datos.dosis +=
+                " | 1X = Preventivo (presión baja)";
 
         }
 
 
         if (
-            !/curativo/i.test(
-                dosisBIO
+            !normalizarTexto(
+                datos.dosis
+            ).includes(
+                "curativo"
             )
         ) {
 
-            dosisBIO +=
-                " | 2X = Curativo";
+            datos.dosis +=
+                " | 2X = Curativo (presión alta)";
 
         }
 
     }
 
 
-    datos.dosis =
-        dosisBIO;
-
-
     // -------------------------------------------------
-    // ALTA PRESIÓN
+    // PRESIÓN ALTA
     // -------------------------------------------------
 
     if (
@@ -1920,13 +2092,7 @@ function aplicarReglasBIO(
             "alta presion"
         ) ||
         doc.includes(
-            "alta presión"
-        ) ||
-        doc.includes(
             "presion alta"
-        ) ||
-        doc.includes(
-            "presión alta"
         )
     ) {
 
@@ -1939,7 +2105,7 @@ function aplicarReglasBIO(
         ) {
 
             datos.observaciones +=
-                " La dosis mayor se relaciona con alta presión de plaga cuando así lo establece la documentación.";
+                " La documentación indica considerar la presión de la plaga; la dosis mayor se interpreta como curativa/presión alta cuando el documento lo respalda.";
 
         }
 
@@ -1947,70 +2113,57 @@ function aplicarReglasBIO(
 
 
     // -------------------------------------------------
-    // REGLA CRISANTEMO
+    // CRISANTEMO / FLORES
     // -------------------------------------------------
-
-    const cultivos =
-        datos.cultivos.join(
-            " "
-        );
-
 
     const cultivosN =
         normalizarTexto(
-            cultivos
+            datos.cultivos.join(
+                " "
+            )
         );
 
 
-    if (
+    const tieneCrisantemo =
         cultivosN.includes(
             "crisantemo"
-        )
-    ) {
-
-        // Ya existe recomendación directa.
-        return datos;
-
-    }
+        );
 
 
-    if (
+    const tieneFlores =
         cultivosN.includes(
             "flor"
         ) ||
         cultivosN.includes(
             "ornamental"
-        )
-    ) {
-
-        return datos;
-
-    }
+        );
 
 
-    // -------------------------------------------------
-    // No hacemos una falsa autorización.
-    // La asociación con hortalizas se marca en
-    // observaciones y se utilizará como regla BIO
-    // cuando falte crisantemo/flores.
-    // -------------------------------------------------
+    const tieneHortalizas =
+        cultivosN.includes(
+            "hortal"
+        ) ||
+        cultivosN.includes(
+            "verdura"
+        );
+
 
     if (
-        datos.nombre &&
-        datos.nombre !==
-            "No encontrado"
+        !tieneCrisantemo &&
+        !tieneFlores &&
+        tieneHortalizas
     ) {
 
         if (
             !normalizarTexto(
                 datos.observaciones
             ).includes(
-                "hortalizas"
+                "referencia agronomica bio"
             )
         ) {
 
             datos.observaciones +=
-                " Regla BIO: si no existe recomendación específica para crisantemo/flores, utilizar hortalizas como referencia agronómica y nunca árboles o vides.";
+                " Referencia agronómica BIO tomada de hortalizas por ausencia de recomendación específica para crisantemo/flores; nunca se utilizan árboles o vides como referencia.";
 
         }
 
@@ -2023,45 +2176,36 @@ function aplicarReglasBIO(
 
 
 // =====================================================
-// DOSIS BIO
+// CONSTRUIR DOSIS BIO
 // =====================================================
 
 function construirDosisBIO(
-    dosis
+    dosis,
+    mojamiento
 ) {
 
     if (
-        !dosis
+        !dosis ||
+        normalizarTexto(
+            dosis
+        ) ===
+        "no encontrado"
     ) {
 
-        return "No encontrado";
+        return
+            "No encontrado";
 
     }
 
 
-    const original =
+    let original =
         String(
             dosis
         ).trim();
 
 
-    if (
-        normalizarTexto(
-            original
-        ) ===
-        "no encontrado"
-    ) {
-
-        return original;
-
-    }
-
-
     // -------------------------------------------------
-    // Rango:
-    //
-    // 30-40 g / 100 L
-    // 30 a 40 g / 100 L
+    // RANGO POR 100 L
     // -------------------------------------------------
 
     const rango =
@@ -2075,14 +2219,20 @@ function construirDosisBIO(
     ) {
 
         const a =
-            parseNumber(
-                rango[1]
+            parseFloat(
+                rango[1].replace(
+                    ",",
+                    "."
+                )
             );
 
 
         const b =
-            parseNumber(
-                rango[2]
+            parseFloat(
+                rango[2].replace(
+                    ",",
+                    "."
+                )
             );
 
 
@@ -2092,50 +2242,25 @@ function construirDosisBIO(
             );
 
 
-        const calculos =
-            construirCalculos(
+        original +=
+            "\n\nCálculo BIO por volumen de agua:";
+
+
+        original +=
+            calcularVolumenes(
                 a,
                 b,
                 unidad
             );
 
 
-        let resultado =
-            original +
-            "\n\nCálculo BIO por volumen de agua:";
-
-
-        resultado +=
-            calculos;
-
-
-        if (
-            /1\s*x/i.test(
-                original
-            ) ||
-            /2\s*x/i.test(
-                original
-            )
-        ) {
-
-            resultado +=
-                "\n1X = Preventivo (presión baja)";
-
-            resultado +=
-                "\n2X = Curativo (presión alta)";
-
-        }
-
-
-        return resultado;
+        return original;
 
     }
 
 
     // -------------------------------------------------
-    // Dosis única:
-    //
-    // 30 g / 100 L
+    // DOSIS ÚNICA POR 100 L
     // -------------------------------------------------
 
     const unica =
@@ -2149,8 +2274,11 @@ function construirDosisBIO(
     ) {
 
         const valor =
-            parseNumber(
-                unica[1]
+            parseFloat(
+                unica[1].replace(
+                    ",",
+                    "."
+                )
             );
 
 
@@ -2160,54 +2288,29 @@ function construirDosisBIO(
             );
 
 
-        const calculos =
-            construirCalculos(
+        original +=
+            "\n\nCálculo BIO por volumen de agua:";
+
+
+        original +=
+            calcularVolumenes(
                 valor,
                 null,
                 unidad
             );
 
 
-        let resultado =
-            original +
-            "\n\nCálculo BIO por volumen de agua:";
-
-
-        resultado +=
-            calculos;
-
-
-        if (
-            /1\s*x/i.test(
-                original
-            ) ||
-            /2\s*x/i.test(
-                original
-            )
-        ) {
-
-            resultado +=
-                "\n1X = Preventivo (presión baja)";
-
-            resultado +=
-                "\n2X = Curativo (presión alta)";
-
-        }
-
-
-        return resultado;
+        return original;
 
     }
 
 
     // -------------------------------------------------
-    // Dosis por hectárea:
-    //
-    // No convertir sin mojamiento.
+    // DOSIS POR HECTÁREA
     // -------------------------------------------------
 
     if (
-        /\/\s*ha/i.test(
+        /\/\s*ha\b/i.test(
             original
         ) ||
         /por\s+hect[aá]rea/i.test(
@@ -2215,10 +2318,40 @@ function construirDosisBIO(
         )
     ) {
 
-        return (
+        const mojamientoValido =
+            extraerMojamiento100L(
+                mojamiento
+            );
+
+
+        if (
+            mojamientoValido
+        ) {
+
+            const calculado =
+                calcularDesdeHectarea(
+                    original,
+                    mojamientoValido
+                );
+
+
+            if (
+                calculado
+            ) {
+
+                return
+                    original +
+                    "\n\nCálculo BIO por volumen de agua:" +
+                    calculado;
+
+            }
+
+        }
+
+
+        return
             original +
-            "\n\nCálculo BIO para 1 / 15 / 100 / 160 L: requiere mojamiento oficial de referencia para convertir una dosis por hectárea. No se realiza una conversión inventada."
-        );
+            "\n\nCálculo BIO 1 / 15 / 100 / 160 L: requiere mojamiento oficial para convertir una dosis por hectárea.";
 
     }
 
@@ -2229,12 +2362,12 @@ function construirDosisBIO(
 
 
 // =====================================================
-// CALCULOS 1 / 15 / 100 / 160 L
+// CALCULAR 1 / 15 / 100 / 160
 // =====================================================
 
-function construirCalculos(
-    valor1,
-    valor2,
+function calcularVolumenes(
+    a,
+    b,
     unidad
 ) {
 
@@ -2256,33 +2389,205 @@ function construirCalculos(
         of litros
     ) {
 
-        const a =
-            valor1 *
+        const valorA =
+            a *
             L /
             100;
-
-
-        const b =
-            valor2 != null
-                ? valor2 *
-                    L /
-                    100
-                : null;
 
 
         if (
             b != null
         ) {
 
+            const valorB =
+                b *
+                L /
+                100;
+
+
             resultado +=
-                `\n${L} L = ${formatear(a)}-${formatear(b)} ${unidad}`;
+                `\n${L} L = ${formatearNumero(valorA)}-${formatearNumero(valorB)} ${unidad}`;
 
         } else {
 
             resultado +=
-                `\n${L} L = ${formatear(a)} ${unidad}`;
+                `\n${L} L = ${formatearNumero(valorA)} ${unidad}`;
 
         }
+
+    }
+
+
+    return resultado;
+
+}
+
+
+// =====================================================
+// MOJAMIENTO
+// =====================================================
+
+function extraerMojamiento100L(
+    texto
+) {
+
+    if (
+        !texto
+    ) {
+
+        return null;
+
+    }
+
+
+    const match =
+        String(
+            texto
+        ).match(
+            /(\d+(?:[.,]\d+)?)\s*(?:-|a)\s*(\d+(?:[.,]\d+)?)\s*L\s*\/\s*ha/i
+        );
+
+
+    if (
+        match
+    ) {
+
+        const min =
+            parseFloat(
+                match[1].replace(
+                    ",",
+                    "."
+                )
+            );
+
+
+        const max =
+            parseFloat(
+                match[2].replace(
+                    ",",
+                    "."
+                )
+            );
+
+
+        return {
+            min,
+            max
+        };
+
+    }
+
+
+    return null;
+
+}
+
+
+// =====================================================
+// DOSIS / HA
+// =====================================================
+
+function calcularDesdeHectarea(
+    dosis,
+    mojamiento
+) {
+
+    if (
+        !mojamiento
+    ) {
+
+        return "";
+
+    }
+
+
+    // -------------------------------------------------
+    // Solo hacemos conversión cuando encontramos
+    // una dosis simple g/ha o kg/ha.
+    // -------------------------------------------------
+
+    const match =
+        String(
+            dosis
+        ).match(
+            /(\d+(?:[.,]\d+)?)\s*(g|kg|ml|mL|L)\s*\/\s*ha/i
+        );
+
+
+    if (
+        !match
+    ) {
+
+        return "";
+
+    }
+
+
+    const cantidad =
+        parseFloat(
+            match[1].replace(
+                ",",
+                "."
+            )
+        );
+
+
+    const unidad =
+        normalizarUnidad(
+            match[2]
+        );
+
+
+    const litros =
+        [
+            1,
+            15,
+            100,
+            160
+        ];
+
+
+    let resultado =
+        "";
+
+
+    for (
+        const agua
+        of litros
+    ) {
+
+        // Usamos el promedio solo para mostrar
+        // una referencia cuando la etiqueta entrega
+        // rango de mojamiento.
+        const aguaPorHa =
+            (
+                mojamiento.min +
+                mojamiento.max
+            ) /
+            2;
+
+
+        if (
+            aguaPorHa <= 0
+        ) {
+
+            continue;
+
+        }
+
+
+        const cantidadPorLitro =
+            cantidad /
+            aguaPorHa;
+
+
+        const cantidadEnVolumen =
+            cantidadPorLitro *
+            agua;
+
+
+        resultado +=
+            `\n${agua} L = ${formatearNumero(cantidadEnVolumen)} ${unidad}`;
 
     }
 
@@ -2406,345 +2711,84 @@ function normalizarDatos(
     }
 
 
+    if (
+        !("modelo_utilizado"
+            in datos)
+    ) {
+
+        datos.modelo_utilizado =
+            null;
+
+    }
+
+
     return datos;
 
 }
 
 
 // =====================================================
-// NORMALIZAR UNIDAD
+// AGREGAR FUENTES
 // =====================================================
 
-function normalizarUnidad(
-    unidad
+function agregarFuentes(
+    observaciones,
+    sag,
+    documentoURL
 ) {
 
-    const u =
-        String(
-            unidad
-        ).toLowerCase();
-
-
-    if (
-        u === "ml" ||
-        u === "cc"
-    ) {
-
-        return "mL";
-
-    }
-
-
-    if (
-        u === "l"
-    ) {
-
-        return "L";
-
-    }
-
-
-    if (
-        u === "kg"
-    ) {
-
-        return "kg";
-
-    }
-
-
-    if (
-        u === "mg"
-    ) {
-
-        return "mg";
-
-    }
-
-
-    return "g";
-
-}
-
-
-// =====================================================
-// PARSEAR NÚMERO
-// =====================================================
-
-function parseNumber(
-    valor
-) {
-
-    return parseFloat(
-        String(
-            valor
-        ).replace(
-            ",",
-            "."
-        )
-    );
-
-}
-
-
-// =====================================================
-// FORMATEAR
-// =====================================================
-
-function formatear(
-    valor
-) {
-
-    if (
-        Number.isInteger(
-            valor
-        )
-    ) {
-
-        return String(
-            valor
-        );
-
-    }
-
-
-    return Number(
-        valor.toFixed(
-            4
-        )
-    )
-        .toString()
-        .replace(
-            ".",
-            ","
-        );
-
-}
-
-
-// =====================================================
-// LIMPIAR
-// =====================================================
-
-function limpiar(
-    valor
-) {
-
-    return typeof valor ===
-        "string"
-        ? valor.trim()
-        : "";
-
-}
-
-
-// =====================================================
-// NORMALIZAR TEXTO
-// =====================================================
-
-function normalizarTexto(
-    texto
-) {
-
-    return String(
-        texto || ""
-    )
-        .normalize(
-            "NFD"
-        )
-        .replace(
-            /[\u0300-\u036f]/g,
-            ""
-        )
-        .toLowerCase()
-        .replace(
-            /[^a-z0-9]+/g,
-            " "
-        )
-        .trim();
-
-}
-
-
-// =====================================================
-// LIMPIAR HTML
-// =====================================================
-
-function stripHTML(
-    html
-) {
-
-    return String(
-        html || ""
-    )
-        .replace(
-            /<script[\s\S]*?<\/script>/gi,
-            " "
-        )
-        .replace(
-            /<style[\s\S]*?<\/style>/gi,
-            " "
-        )
-        .replace(
-            /<[^>]+>/g,
-            " "
-        );
-
-}
-
-
-// =====================================================
-// LIMPIAR ESPACIOS
-// =====================================================
-
-function limpiarEspacios(
-    texto
-) {
-
-    return String(
-        texto || ""
-    )
-        .replace(
-            /\s+/g,
-            " "
-        )
-        .trim();
-
-}
-
-
-// =====================================================
-// DECODE HTML
-// =====================================================
-
-function decodeHTML(
-    texto
-) {
-
-    return String(
-        texto || ""
-    )
-        .replace(
-            /&amp;/gi,
-            "&"
-        )
-        .replace(
-            /&quot;/gi,
-            '"'
-        )
-        .replace(
-            /&#39;/gi,
-            "'"
-        )
-        .replace(
-            /&nbsp;/gi,
-            " "
-        );
-
-}
-
-
-// =====================================================
-// CONVERTIR URL
-// =====================================================
-
-function convertirURL(
-    href
-) {
-
-    if (
-        !href
-    ) {
-
-        return "";
-
-    }
-
-
-    if (
-        /^https?:\/\//i.test(
-            href
-        )
-    ) {
-
-        return href;
-
-    }
-
-
-    if (
-        href.startsWith(
-            "//"
-        )
-    ) {
-
-        return "https:" +
-            href;
-
-    }
-
-
-    if (
-        href.startsWith("/")
-    ) {
-
-        return SAG_DOMINIO +
-            href;
-
-    }
-
-
-    return SAG_DOMINIO +
-        "/" +
-        href.replace(
-            /^\/+/,
-            ""
-        );
-
-}
-
-
-// =====================================================
-// DUPLICADOS
-// =====================================================
-
-function eliminarDuplicados(
-    resultados
-) {
-
-    const vistos =
-        new Set();
-
-
-    return resultados.filter(
-        item => {
-
-            const clave =
-                item.url +
-                "|" +
-                item.titulo;
-
-
-            if (
-                vistos.has(
-                    clave
-                )
-            ) {
-
-                return false;
-
-            }
-
-
-            vistos.add(
-                clave
+    let resultado =
+        normalizarTexto(
+            observaciones
+        ) ===
+        "no encontrado"
+            ? ""
+            : String(
+                observaciones
             );
 
 
-            return true;
+    if (
+        sag.encontrado
+    ) {
 
-        }
-    );
+        resultado +=
+            " Fuente oficial consultada: SAG Chile.";
+
+    }
+
+
+    if (
+        sag.productUrl
+    ) {
+
+        resultado +=
+            ` Página SAG: ${sag.productUrl}`;
+
+    }
+
+
+    if (
+        documentoURL
+    ) {
+
+        resultado +=
+            ` Documento: ${documentoURL}`;
+
+    }
+
+
+    if (
+        !resultado.trim()
+    ) {
+
+        resultado =
+            "No encontrado";
+
+    }
+
+
+    return resultado.trim();
 
 }
 
@@ -2760,12 +2804,16 @@ async function llamarOpenRouter(
 
     const content =
         [
+
             {
                 type:
                     "text",
+
                 text:
                     prompt
+
             }
+
         ];
 
 
@@ -2815,91 +2863,123 @@ async function llamarOpenRouter(
         };
 
 
-    const response =
-        await fetch(
-            OPENROUTER_URL,
-            {
+    const controller =
+        new AbortController();
 
-                method:
-                    "POST",
 
-                headers:
-                {
-
-                    "Content-Type":
-                        "application/json",
-
-                    "Authorization":
-                        `Bearer ${API_KEY}`,
-
-                    "HTTP-Referer":
-                        "https://bio-ia-2026.netlify.app",
-
-                    "X-Title":
-                        "BÍO IA"
-
-                },
-
-                body:
-                    JSON.stringify(
-                        payload
-                    )
-
-            }
+    const timer =
+        setTimeout(
+            () =>
+                controller.abort(),
+            TIMEOUT_MS
         );
-
-
-    const text =
-        await response.text();
-
-
-    let data;
 
 
     try {
 
-        data =
-            JSON.parse(
-                text
+        const response =
+            await fetch(
+                OPENROUTER_URL,
+                {
+
+                    method:
+                        "POST",
+
+                    headers:
+                    {
+
+                        "Content-Type":
+                            "application/json",
+
+                        "Authorization":
+                            `Bearer ${API_KEY}`,
+
+                        "HTTP-Referer":
+                            "https://bio-ia-2026.netlify.app",
+
+                        "X-Title":
+                            "BÍO IA V7"
+
+                    },
+
+                    body:
+                        JSON.stringify(
+                            payload
+                        ),
+
+                    signal:
+                        controller.signal
+
+                }
             );
 
-    } catch {
 
-        data =
-            {
-                raw:
-                    text
-            };
-
-    }
+        const raw =
+            await response.text();
 
 
-    console.log(
-        "OpenRouter HTTP:",
-        response.status
-    );
+        let data;
 
 
-    console.log(
-        "OpenRouter modelo:",
-        data?.model ||
-            "No informado"
-    );
+        try {
+
+            data =
+                JSON.parse(
+                    raw
+                );
+
+        } catch {
+
+            data =
+                {
+                    raw
+                };
+
+        }
 
 
-    if (
-        !response.ok
-    ) {
+        console.log(
+            "OpenRouter HTTP:",
+            response.status
+        );
 
-        throw new Error(
-            data?.error?.message ||
-            `OpenRouter HTTP ${response.status}`
+
+        console.log(
+            "OpenRouter modelo:",
+            data?.model ||
+                "No informado"
+        );
+
+
+        if (
+            !response.ok
+        ) {
+
+            throw new Error(
+                data?.error?.message ||
+                `OpenRouter HTTP ${response.status}`
+            );
+
+        }
+
+
+        return {
+
+            data,
+
+            modelo:
+                data?.model ||
+                null
+
+        };
+
+    } finally {
+
+        clearTimeout(
+            timer
         );
 
     }
-
-
-    return data;
 
 }
 
@@ -3074,101 +3154,7 @@ function parsearJSON(
 
 
 // =====================================================
-// AGREGAR FUENTE
-// =====================================================
-
-function agregarFuente(
-    observaciones,
-    sag,
-    documentoURL
-) {
-
-    let resultado =
-        normalizarTexto(
-            observaciones
-        ) ===
-        "no encontrado"
-            ? ""
-            : String(
-                observaciones
-            );
-
-
-    if (
-        sag.encontrado
-    ) {
-
-        resultado +=
-            " Fuente oficial consultada: SAG Chile.";
-
-    }
-
-
-    if (
-        documentoURL
-    ) {
-
-        resultado +=
-            ` Documento consultado: ${documentoURL}`;
-
-    }
-
-
-    if (
-        !resultado.trim()
-    ) {
-
-        resultado =
-            "No encontrado";
-
-    }
-
-
-    return resultado.trim();
-
-}
-
-
-// =====================================================
-// RESPONDER
-// =====================================================
-
-function responder(
-    statusCode,
-    body
-) {
-
-    return {
-
-        statusCode:
-            statusCode,
-
-        headers:
-        {
-
-            "Content-Type":
-                "application/json; charset=utf-8",
-
-            "Cache-Control":
-                "no-store",
-
-            "Access-Control-Allow-Origin":
-                "*"
-
-        },
-
-        body:
-            JSON.stringify(
-                body
-            )
-
-    };
-
-}
-
-
-// =====================================================
-// FETCH CON TIMEOUT
+// FETCH TEXT
 // =====================================================
 
 async function fetchText(
@@ -3183,7 +3169,7 @@ async function fetchText(
         setTimeout(
             () =>
                 controller.abort(),
-            REQUEST_TIMEOUT
+            TIMEOUT_MS
         );
 
 
@@ -3201,10 +3187,10 @@ async function fetchText(
                     {
 
                         "User-Agent":
-                            "Mozilla/5.0 BÍO-IA",
+                            "Mozilla/5.0 BÍO-IA V7",
 
                         "Accept":
-                            "text/html,application/xhtml+xml,text/plain,application/pdf"
+                            "text/html,application/xhtml+xml,text/plain,application/pdf,*/*"
 
                     },
 
@@ -3235,5 +3221,353 @@ async function fetchText(
         );
 
     }
+
+}
+
+
+// =====================================================
+// UTILIDADES
+// =====================================================
+
+function convertirURLSAG(
+    href
+) {
+
+    if (
+        !href
+    ) {
+
+        return "";
+
+    }
+
+
+    if (
+        /^https?:\/\//i.test(
+            href
+        )
+    ) {
+
+        return href;
+
+    }
+
+
+    if (
+        href.startsWith(
+            "//"
+        )
+    ) {
+
+        return "https:" +
+            href;
+
+    }
+
+
+    if (
+        href.startsWith("/")
+    ) {
+
+        return SAG_DOMAIN +
+            href;
+
+    }
+
+
+    return SAG_DOMAIN +
+        "/" +
+        href.replace(
+            /^\/+/,
+            ""
+        );
+
+}
+
+
+function decodeHTML(
+    texto
+) {
+
+    return String(
+        texto || ""
+    )
+        .replace(
+            /&amp;/gi,
+            "&"
+        )
+        .replace(
+            /&quot;/gi,
+            '"'
+        )
+        .replace(
+            /&#39;/gi,
+            "'"
+        )
+        .replace(
+            /&nbsp;/gi,
+            " "
+        );
+
+}
+
+
+function stripHTML(
+    html
+) {
+
+    return String(
+        html || ""
+    )
+        .replace(
+            /<script[\s\S]*?<\/script>/gi,
+            " "
+        )
+        .replace(
+            /<style[\s\S]*?<\/style>/gi,
+            " "
+        )
+        .replace(
+            /<[^>]+>/g,
+            " "
+        );
+
+}
+
+
+function limpiarEspacios(
+    texto
+) {
+
+    return String(
+        texto || ""
+    )
+        .replace(
+            /\s+/g,
+            " "
+        )
+        .trim();
+
+}
+
+
+function limpiar(
+    texto
+) {
+
+    return typeof texto ===
+        "string"
+        ? texto.trim()
+        : "";
+
+}
+
+
+function normalizarTexto(
+    texto
+) {
+
+    return String(
+        texto || ""
+    )
+        .normalize(
+            "NFD"
+        )
+        .replace(
+            /[\u0300-\u036f]/g,
+            ""
+        )
+        .toLowerCase()
+        .replace(
+            /[^a-z0-9]+/g,
+            " "
+        )
+        .trim();
+
+}
+
+
+function eliminarDuplicadosSAG(
+    resultados
+) {
+
+    const vistos =
+        new Set();
+
+
+    return resultados.filter(
+        item => {
+
+            const key =
+                item.url +
+                "|" +
+                normalizarTexto(
+                    item.titulo
+                );
+
+
+            if (
+                vistos.has(
+                    key
+                )
+            ) {
+
+                return false;
+
+            }
+
+
+            vistos.add(
+                key
+            );
+
+
+            return true;
+
+        }
+    );
+
+}
+
+
+function normalizarUnidad(
+    unidad
+) {
+
+    const u =
+        String(
+            unidad
+        ).toLowerCase();
+
+
+    if (
+        u === "ml" ||
+        u === "cc"
+    ) {
+
+        return "mL";
+
+    }
+
+
+    if (
+        u === "l"
+    ) {
+
+        return "L";
+
+    }
+
+
+    if (
+        u === "kg"
+    ) {
+
+        return "kg";
+
+    }
+
+
+    if (
+        u === "mg"
+    ) {
+
+        return "mg";
+
+    }
+
+
+    return "g";
+
+}
+
+
+function formatearNumero(
+    valor
+) {
+
+    if (
+        Number.isInteger(
+            valor
+        )
+    ) {
+
+        return String(
+            valor
+        );
+
+    }
+
+
+    return Number(
+        valor.toFixed(
+            4
+        )
+    )
+        .toString()
+        .replace(
+            ".",
+            ","
+        );
+
+}
+
+
+function parseBody(
+    body
+) {
+
+    try {
+
+        return JSON.parse(
+            body ||
+            "{}"
+        );
+
+    } catch {
+
+        throw new Error(
+            "El cuerpo de la solicitud no es JSON válido."
+        );
+
+    }
+
+}
+
+
+// =====================================================
+// RESPUESTA NETLIFY
+// =====================================================
+
+function responseJSON(
+    statusCode,
+    body
+) {
+
+    return {
+
+        statusCode:
+            statusCode,
+
+        headers:
+        {
+
+            "Content-Type":
+                "application/json; charset=utf-8",
+
+            "Cache-Control":
+                "no-store",
+
+            "Access-Control-Allow-Origin":
+                "*"
+
+        },
+
+        body:
+            JSON.stringify(
+                body
+            )
+
+    };
 
 }
