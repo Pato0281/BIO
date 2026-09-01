@@ -1,20 +1,38 @@
 // ======================================================
-// BÍO IA V10.2
+// BÍO IA V11
 // analizarEtiqueta.js
 // ======================================================
 //
-// RESPONSABILIDAD:
+// FLUJO:
 //
-// IDENTIFICAR INFORMACIÓN VISIBLE EN LA FOTO
+// FOTO
+//   ↓
+// OpenRouter / MiniMax M3 Free
+//   ↓
+// Identificación inicial
+//   ↓
+// SAG Chile
+//   ↓
+// Página oficial
+//   ↓
+// PDF oficial
+//   ↓
+// OpenRouter / MiniMax M3 Free
+//   ↓
+// Interpretación del PDF
+//   ↓
+// app.js
+//
+// LA IA SOLO ENTREGA:
 //
 // ✅ Nombre comercial
 // ✅ Ingrediente activo
 // ✅ Concentración
 // ✅ Modo de acción
-// ✅ Función
+// ✅ Función técnica
 // ✅ Plagas / enfermedades
 //
-// NO IDENTIFICA:
+// NO ENTREGA:
 //
 // ❌ Dosis
 // ❌ Carencia
@@ -25,7 +43,13 @@
 //
 // ======================================================
 
-const API_KEY = process.env.OPENROUTER_API_KEY;
+
+// ======================================================
+// CONFIGURACIÓN
+// ======================================================
+
+const API_KEY =
+    process.env.OPENROUTER_API_KEY;
 
 const OPENROUTER_URL =
     "https://openrouter.ai/api/v1/chat/completions";
@@ -33,8 +57,26 @@ const OPENROUTER_URL =
 const MODEL =
     "minimax/minimax-m3:free";
 
-const TIMEOUT_MS =
-    20000;
+const SAG_PUBLICATIONS_URL =
+    "https://www.sag.gob.cl/ambitos-de-accion/autorizacion-y-evaluacion-de-plaguicidas/publicaciones";
+
+const SAG_CONTENT_URL =
+    "https://www.sag.gob.cl/content";
+
+const SAG_DOMAIN =
+    "https://www.sag.gob.cl";
+
+const JINA_PREFIX =
+    "https://r.jina.ai/";
+
+const AI_TIMEOUT_MS =
+    25000;
+
+const WEB_TIMEOUT_MS =
+    12000;
+
+const MAX_DOCUMENT_CHARS =
+    90000;
 
 
 // ======================================================
@@ -43,38 +85,72 @@ const TIMEOUT_MS =
 
 exports.handler = async (event) => {
 
-    console.log("======================================");
-    console.log("BÍO IA V10.2");
-    console.log("INICIO");
-    console.log("======================================");
+    const inicio =
+        Date.now();
 
 
-    if (event.httpMethod !== "POST") {
+    console.log(
+        "=============================================="
+    );
 
-        return respuesta(
+    console.log(
+        "BÍO IA V11 - INICIO"
+    );
+
+    console.log(
+        "=============================================="
+    );
+
+
+    // --------------------------------------------------
+    // MÉTODO
+    // --------------------------------------------------
+
+    if (
+        event.httpMethod !== "POST"
+    ) {
+
+        return responder(
             405,
             {
-                ok: false,
+                ok:
+                    false,
+
                 mensaje:
-                    "Método no permitido."
+                    "Método no permitido. Use POST."
             }
         );
 
     }
 
 
-    if (!API_KEY) {
+    // --------------------------------------------------
+    // API KEY
+    // --------------------------------------------------
+
+    if (
+        !API_KEY
+    ) {
 
         console.error(
-            "Falta OPENROUTER_API_KEY."
+            "ERROR: OPENROUTER_API_KEY no configurada."
         );
 
-        return respuesta(
+        return responder(
             500,
             {
-                ok: false,
+                ok:
+                    false,
+
                 mensaje:
-                    "OPENROUTER_API_KEY no está configurada."
+                    "OPENROUTER_API_KEY no está configurada en Netlify.",
+
+                proveedor:
+                    "OpenRouter",
+
+                modelo:
+                    MODEL
+
             }
         );
 
@@ -87,43 +163,32 @@ exports.handler = async (event) => {
         // BODY
         // ==================================================
 
-        let body;
-
-        try {
-
-            body =
-                JSON.parse(
-                    event.body || "{}"
-                );
-
-        } catch {
-
-            return respuesta(
-                400,
-                {
-                    ok: false,
-                    mensaje:
-                        "El cuerpo recibido no es JSON válido."
-                }
+        const body =
+            parsearBody(
+                event.body
             );
 
-        }
 
-
-        let image =
+        let imageBase64 =
             body.image ||
             body.imageBase64 ||
             "";
 
 
-        if (!image) {
+        if (
+            !imageBase64
+        ) {
 
-            return respuesta(
+            return responder(
                 400,
                 {
-                    ok: false,
+
+                    ok:
+                        false,
+
                     mensaje:
                         "No se recibió ninguna imagen."
+
                 }
             );
 
@@ -139,18 +204,19 @@ exports.handler = async (event) => {
 
 
         if (
-            image.startsWith("data:")
+            imageBase64.startsWith(
+                "data:"
+            )
         ) {
 
             const match =
-                image.match(
+                imageBase64.match(
                     /^data:([^;]+);base64,/
                 );
 
 
             if (
-                match &&
-                match[1]
+                match
             ) {
 
                 mimeType =
@@ -159,17 +225,19 @@ exports.handler = async (event) => {
             }
 
 
-            const coma =
-                image.indexOf(",");
+            const separador =
+                imageBase64.indexOf(
+                    ","
+                );
 
 
             if (
-                coma !== -1
+                separador !== -1
             ) {
 
-                image =
-                    image.substring(
-                        coma + 1
+                imageBase64 =
+                    imageBase64.substring(
+                        separador + 1
                     );
 
             }
@@ -178,15 +246,21 @@ exports.handler = async (event) => {
 
 
         if (
-            !mimeType.startsWith("image/")
+            !mimeType.startsWith(
+                "image/"
+            )
         ) {
 
-            return respuesta(
+            return responder(
                 400,
                 {
-                    ok: false,
+
+                    ok:
+                        false,
+
                     mensaje:
-                        "El archivo no es una imagen válida."
+                        `Tipo de imagen no soportado: ${mimeType}`
+
                 }
             );
 
@@ -194,83 +268,448 @@ exports.handler = async (event) => {
 
 
         console.log(
-            "Imagen recibida:",
+            "Imagen:",
             mimeType
         );
 
         console.log(
-            "Tamaño:",
-            image.length
+            "Tamaño Base64:",
+            imageBase64.length
         );
 
 
         // ==================================================
-        // PROMPT
+        // ETAPA 1
+        // IDENTIFICACIÓN VISUAL
         // ==================================================
 
-        const prompt = `
+        console.log(
+            "----------------------------------------------"
+        );
+
+        console.log(
+            "ETAPA 1: IDENTIFICACIÓN VISUAL"
+        );
+
+        console.log(
+            "----------------------------------------------"
+        );
+
+
+        const identificacion =
+            await identificarDesdeImagen(
+                imageBase64,
+                mimeType
+            );
+
+
+        console.log(
+            "IDENTIFICACIÓN INICIAL:"
+        );
+
+        console.log(
+            JSON.stringify(
+                identificacion,
+                null,
+                2
+            )
+        );
+
+
+        // ==================================================
+        // ETAPA 2
+        // BÚSQUEDA SAG
+        // ==================================================
+
+        console.log(
+            "----------------------------------------------"
+        );
+
+        console.log(
+            "ETAPA 2: BÚSQUEDA SAG"
+        );
+
+        console.log(
+            "----------------------------------------------"
+        );
+
+
+        const sag =
+            await buscarSAG(
+                identificacion
+            );
+
+
+        console.log(
+            "RESULTADO SAG:"
+        );
+
+        console.log(
+            JSON.stringify(
+                sag,
+                null,
+                2
+            )
+        );
+
+
+        // ==================================================
+        // ETAPA 3
+        // PDF
+        // ==================================================
+
+        let documento =
+            "";
+
+        let fuenteURL =
+            sag.pdfUrl ||
+            sag.productUrl ||
+            "";
+
+
+        if (
+            sag.pdfUrl
+        ) {
+
+            console.log(
+                "----------------------------------------------"
+            );
+
+            console.log(
+                "ETAPA 3: LECTURA PDF OFICIAL SAG"
+            );
+
+            console.log(
+                "----------------------------------------------"
+            );
+
+
+            documento =
+                await leerDocumento(
+                    sag.pdfUrl
+                );
+
+        }
+
+
+        // --------------------------------------------------
+        // FALLBACK: página SAG
+        // --------------------------------------------------
+
+        if (
+            !documento &&
+            sag.productUrl
+        ) {
+
+            console.log(
+                "PDF no pudo leerse."
+            );
+
+            console.log(
+                "Intentando página SAG."
+            );
+
+
+            fuenteURL =
+                sag.productUrl;
+
+
+            documento =
+                await leerDocumento(
+                    sag.productUrl
+                );
+
+        }
+
+
+        console.log(
+            "Caracteres del documento:",
+            documento.length
+        );
+
+
+        // ==================================================
+        // ETAPA 4
+        // INTERPRETACIÓN PDF
+        // ==================================================
+
+        let datosFinales =
+            identificacion;
+
+
+        if (
+            documento &&
+            documento.length >
+                100
+        ) {
+
+            console.log(
+                "----------------------------------------------"
+            );
+
+            console.log(
+                "ETAPA 4: INTERPRETACIÓN DEL PDF"
+            );
+
+            console.log(
+                "----------------------------------------------"
+            );
+
+
+            try {
+
+                datosFinales =
+                    await interpretarPDF(
+                        identificacion,
+                        documento
+                    );
+
+            } catch (
+                error
+            ) {
+
+                console.error(
+                    "Error interpretando PDF:",
+                    error.message
+                );
+
+
+                console.log(
+                    "Se conservará identificación inicial."
+                );
+
+
+                datosFinales =
+                    identificacion;
+
+            }
+
+        } else {
+
+            console.log(
+                "No existe suficiente información documental."
+            );
+
+        }
+
+
+        // ==================================================
+        // NORMALIZAR
+        // ==================================================
+
+        datosFinales =
+            normalizarDatos(
+                datosFinales
+            );
+
+
+        // ==================================================
+        // RESULTADO
+        // ==================================================
+
+        const resultado = {
+
+            ok:
+                true,
+
+            proveedor:
+                "OpenRouter",
+
+            modelo:
+                MODEL,
+
+            fuente:
+                documento
+                    ? "SAG Chile"
+                    : "Imagen",
+
+            fuente_url:
+                fuenteURL ||
+                null,
+
+            sag:
+            {
+
+                encontrado:
+                    !!sag.encontrado,
+
+                titulo:
+                    sag.titulo ||
+                    null,
+
+                productUrl:
+                    sag.productUrl ||
+                    null,
+
+                pdfUrl:
+                    sag.pdfUrl ||
+                    null
+
+            },
+
+            datos:
+                datosFinales,
+
+            duracion_ms:
+                Date.now() -
+                inicio
+
+        };
+
+
+        console.log(
+            "=============================================="
+        );
+
+        console.log(
+            "BÍO IA V11 - FINAL"
+        );
+
+        console.log(
+            JSON.stringify(
+                resultado,
+                null,
+                2
+            )
+        );
+
+        console.log(
+            "=============================================="
+        );
+
+
+        return responder(
+            200,
+            resultado
+        );
+
+
+    } catch (
+        error
+    ) {
+
+        console.error(
+            "=============================================="
+        );
+
+        console.error(
+            "ERROR GENERAL BÍO IA V11"
+        );
+
+        console.error(
+            error
+        );
+
+        console.error(
+            "=============================================="
+        );
+
+
+        return responder(
+            500,
+            {
+
+                ok:
+                    false,
+
+                mensaje:
+                    error?.message ||
+                    "Error inesperado.",
+
+                proveedor:
+                    "OpenRouter",
+
+                modelo:
+                    MODEL
+
+            }
+        );
+
+    }
+
+};
+
+
+// ======================================================
+// ETAPA 1
+// IDENTIFICACIÓN DESDE IMAGEN
+// ======================================================
+
+async function identificarDesdeImagen(
+    imageBase64,
+    mimeType
+) {
+
+    const prompt = `
+
 Eres BÍO IA.
 
 Analiza la fotografía de una etiqueta o envase
 de un producto fitosanitario agrícola.
 
-Tu trabajo es IDENTIFICAR solamente la información
-que pueda verse o leerse razonablemente en la imagen.
+Tu objetivo es identificar el producto.
 
-NO INVENTES DATOS.
+NO INVENTES información.
 
-DATOS QUE DEBES IDENTIFICAR:
+Debes identificar solamente:
 
-1. Nombre comercial del producto.
-2. Ingrediente activo.
-3. Concentración.
-4. Modo de acción.
-5. Función técnica.
-6. Plagas o enfermedades objetivo.
+- nombre comercial
+- ingrediente activo
+- concentración
+- modo de acción si aparece
+- función técnica
+- plagas o enfermedades visibles
 
-MODO DE ACCIÓN:
+IMPORTANTE:
 
-Utiliza únicamente cuando exista evidencia visible:
+La fotografía puede contener información
+de otro país.
 
-- contacto
-- sistémico
-- ingestión
-- digestivo
+Si aparece SENASA, Perú, Argentina,
+Brasil u otro organismo, NO lo conviertas
+en información SAG Chile.
 
-FUNCIÓN:
-
-Utiliza cuando exista evidencia:
-
-- insecticida
-- fungicida
-- herbicida
-- estimulante
-
-PLAGAS Y ENFERMEDADES:
-
-Extrae solamente las que sean visibles
-o claramente legibles en la imagen.
-
-NO DEBES ENTREGAR:
+NO debes entregar:
 
 - dosis
-- dosis baja
-- dosis alta
 - carencia
 - reingreso
 - fabricante
 - formulación
 - grupo químico
 
-Esos datos serán manejados directamente
-por la aplicación.
+Esos datos NO forman parte de esta etapa.
 
-Si aparece un registro de SENASA u otro organismo
-de otro país, NO lo interpretes como registro SAG.
+MODO DE ACCIÓN:
 
-RESPONDE SOLAMENTE CON UN OBJETO JSON.
+Si aparece evidencia de:
 
-Usa exactamente estos campos:
+sistémico
+contacto
+ingestión
+digestivo
+
+puedes incluirla.
+
+FUNCIÓN:
+
+Cuando exista evidencia:
+
+insecticida
+fungicida
+herbicida
+estimulante
+
+inclúyela.
+
+PLAGAS:
+
+Extrae todas las plagas o enfermedades
+que sean realmente legibles en la fotografía.
+
+No te limites arbitrariamente a dos o tres.
+
+Devuelve solamente JSON con esta estructura:
 
 {
   "tipo_registro": "quimico",
@@ -282,235 +721,1343 @@ Usa exactamente estos campos:
   "plagas_objetivo": []
 }
 
-Cuando un dato no pueda identificarse:
+Si no puedes identificar algo:
 
-campo de texto:
-"No encontrado"
+texto = "No encontrado"
 
-campo de lista:
-[]
+lista = []
 
-No agregues explicaciones adicionales.
 `;
 
 
-        // ==================================================
-        // OPENROUTER
-        // ==================================================
-
-        console.log(
-            "Enviando solicitud a OpenRouter..."
-        );
-
-        console.log(
-            "Modelo:",
-            MODEL
+    const resultado =
+        await llamarOpenRouter(
+            prompt,
+            imageBase64,
+            mimeType
         );
 
 
-        const resultado =
-            await llamarOpenRouter(
-                prompt,
-                image,
-                mimeType
-            );
+    console.log(
+        "OpenRouter imagen HTTP:",
+        resultado.status
+    );
 
 
-        console.log(
-            "OpenRouter HTTP:",
-            resultado.status
-        );
-
-        console.log(
-            "Modelo utilizado:",
-            resultado.model
-        );
+    console.log(
+        "OpenRouter modelo:",
+        resultado.model
+    );
 
 
-        console.log(
-            "======================================"
-        );
+    console.log(
+        "RAW IMAGEN:"
+    );
 
-        console.log(
-            "RESPUESTA RAW"
-        );
+    console.log(
+        resultado.text
+    );
 
-        console.log(
-            "======================================"
-        );
 
-        console.log(
+    return normalizarDatos(
+        parseJSON(
             resultado.text
+        )
+    );
+
+}
+
+
+// ======================================================
+// ETAPA 2
+// BÚSQUEDA SAG
+// ======================================================
+
+async function buscarSAG(
+    identificacion
+) {
+
+    const nombre =
+        String(
+            identificacion.nombre ||
+            ""
+        )
+        .trim();
+
+
+    if (
+        !nombre ||
+        normalize(
+            nombre
+        ) ===
+        "no encontrado"
+    ) {
+
+        return {
+
+            encontrado:
+                false,
+
+            mensaje:
+                "No se pudo obtener el nombre comercial."
+
+        };
+
+    }
+
+
+    const consultas =
+        generarConsultasSAG(
+            nombre
         );
 
-        console.log(
-            "======================================"
-        );
+
+    console.log(
+        "CONSULTAS SAG:"
+    );
+
+    console.log(
+        JSON.stringify(
+            consultas
+        )
+    );
 
 
-        // ==================================================
-        // JSON
-        // ==================================================
+    const candidatos =
+        [];
 
-        const datos =
-            extraerJSON(
-                resultado.text
+
+    // --------------------------------------------------
+    // Buscar en publicaciones SAG
+    // --------------------------------------------------
+
+    for (
+        const consulta
+        of consultas
+    ) {
+
+        try {
+
+            const url =
+                SAG_PUBLICATIONS_URL +
+                "?field_fecha_otros_value=" +
+                "&field_tema_otros_documentos_target_id=All" +
+                "&field_tipo_de_publicacion_target_id=All" +
+                "&order=field_fecha_otros" +
+                "&sort=desc" +
+                "&page=0" +
+                "&title=" +
+                encodeURIComponent(
+                    consulta
+                );
+
+
+            console.log(
+                "URL SAG:",
+                url
             );
 
 
-        console.log(
-            "DATOS IDENTIFICADOS:"
-        );
-
-        console.log(
-            JSON.stringify(
-                datos,
-                null,
-                2
-            )
-        );
+            const html =
+                await fetchText(
+                    url,
+                    WEB_TIMEOUT_MS
+                );
 
 
-        return respuesta(
-            200,
-            {
-
-                ok: true,
-
-                proveedor:
-                    "OpenRouter",
-
-                modelo:
-                    resultado.model,
-
-                datos:
-                    normalizarDatos(
-                        datos
-                    )
-
-            }
-        );
+            const resultados =
+                extraerLinksSAG(
+                    html
+                );
 
 
-    } catch (error) {
+            console.log(
+                "Resultados:",
+                resultados.length
+            );
 
-        console.error(
-            "======================================"
-        );
 
-        console.error(
-            "ERROR BÍO IA V10.2"
-        );
+            candidatos.push(
+                ...resultados
+            );
 
-        console.error(
+        } catch (
             error
+        ) {
+
+            console.error(
+                "Error buscando SAG:",
+                consulta,
+                error.message
+            );
+
+        }
+
+    }
+
+
+    const unicos =
+        eliminarDuplicados(
+            candidatos
         );
+
+
+    console.log(
+        "Candidatos SAG:",
+        unicos.length
+    );
+
+
+    // --------------------------------------------------
+    // Elegir mejor coincidencia
+    // --------------------------------------------------
+
+    let mejor =
+        elegirMejorSAG(
+            unicos,
+            nombre
+        );
+
+
+    // --------------------------------------------------
+    // Fallback por slug
+    // --------------------------------------------------
+
+    if (
+        !mejor
+    ) {
+
+        console.log(
+            "No hubo coincidencia suficiente."
+        );
+
+        console.log(
+            "Intentando búsqueda por URL de contenido."
+        );
+
+
+        mejor =
+            await buscarPorSlugs(
+                nombre
+            );
+
+    }
+
+
+    if (
+        !mejor
+    ) {
+
+        return {
+
+            encontrado:
+                false,
+
+            productoBuscado:
+                nombre,
+
+            mensaje:
+                "No se encontró una coincidencia confiable en SAG Chile."
+
+        };
+
+    }
+
+
+    console.log(
+        "SAG SELECCIONADO:"
+    );
+
+    console.log(
+        mejor.titulo
+    );
+
+    console.log(
+        mejor.url
+    );
+
+    console.log(
+        "Puntaje:",
+        mejor.score ||
+            "slug"
+    );
+
+
+    // --------------------------------------------------
+    // Abrir página
+    // --------------------------------------------------
+
+    let pagina =
+        "";
+
+
+    try {
+
+        pagina =
+            await fetchText(
+                mejor.url,
+                WEB_TIMEOUT_MS
+            );
+
+    } catch (
+        error
+    ) {
 
         console.error(
-            "======================================"
-        );
-
-
-        return respuesta(
-            500,
-            {
-
-                ok: false,
-
-                mensaje:
-                    error?.message ||
-                    "Error procesando la imagen."
-
-            }
+            "Error abriendo página SAG:",
+            error.message
         );
 
     }
 
-};
+
+    // --------------------------------------------------
+    // Encontrar PDF
+    // --------------------------------------------------
+
+    let pdfUrl =
+        encontrarPDF(
+            pagina
+        );
+
+
+    // --------------------------------------------------
+    // Fallback Jina
+    // --------------------------------------------------
+
+    if (
+        !pdfUrl
+    ) {
+
+        try {
+
+            console.log(
+                "PDF no encontrado en HTML."
+            );
+
+            console.log(
+                "Intentando Jina."
+            );
+
+
+            const jinaPage =
+                await fetchText(
+                    JINA_PREFIX +
+                    mejor.url,
+                    WEB_TIMEOUT_MS
+                );
+
+
+            pdfUrl =
+                encontrarPDF(
+                    jinaPage
+                );
+
+        } catch (
+            error
+        ) {
+
+            console.error(
+                "Error Jina:",
+                error.message
+            );
+
+        }
+
+    }
+
+
+    return {
+
+        encontrado:
+            true,
+
+        titulo:
+            mejor.titulo,
+
+        productUrl:
+            mejor.url,
+
+        pdfUrl:
+            pdfUrl ||
+            "",
+
+        fuente:
+            "SAG Chile"
+
+    };
+
+}
 
 
 // ======================================================
-// OPENROUTER
+// CONSULTAS SAG
+// ======================================================
+
+function generarConsultasSAG(
+    nombre
+) {
+
+    const original =
+        limpiarNombre(
+            nombre
+        );
+
+
+    const base =
+        removeFormulation(
+            original
+        );
+
+
+    const marca =
+        removeNumbers(
+            base
+        );
+
+
+    const consultas =
+        [];
+
+
+    agregarConsulta(
+        consultas,
+        original
+    );
+
+
+    agregarConsulta(
+        consultas,
+        base
+    );
+
+
+    agregarConsulta(
+        consultas,
+        marca
+    );
+
+
+    // Variaciones de formulación
+    const formulaciones =
+        [
+            "SP",
+            "PS",
+            "WP",
+            "PW",
+            "WG",
+            "SC",
+            "SL",
+            "EC",
+            "SG"
+        ];
+
+
+    for (
+        const f
+        of formulaciones
+    ) {
+
+        agregarConsulta(
+            consultas,
+            `${base} ${f}`
+        );
+
+    }
+
+
+    return consultas;
+
+}
+
+
+// ======================================================
+// AGREGAR CONSULTA
+// ======================================================
+
+function agregarConsulta(
+    lista,
+    valor
+) {
+
+    if (
+        !valor
+    ) {
+
+        return;
+
+    }
+
+
+    const limpio =
+        valor.trim();
+
+
+    if (
+        !limpio
+    ) {
+
+        return;
+
+    }
+
+
+    const existe =
+        lista.some(
+            x =>
+                normalize(
+                    x
+                ) ===
+                normalize(
+                    limpio
+                )
+        );
+
+
+    if (
+        !existe
+    ) {
+
+        lista.push(
+            limpio
+        );
+
+    }
+
+}
+
+
+// ======================================================
+// ELEGIR SAG
+// ======================================================
+
+function elegirMejorSAG(
+    resultados,
+    buscado
+) {
+
+    if (
+        !resultados.length
+    ) {
+
+        return null;
+
+    }
+
+
+    const target =
+        normalize(
+            buscado
+        );
+
+
+    const base =
+        normalize(
+            removeFormulation(
+                limpiarNombre(
+                    buscado
+                )
+            )
+        );
+
+
+    const marca =
+        normalize(
+            removeNumbers(
+                removeFormulation(
+                    limpiarNombre(
+                        buscado
+                    )
+                )
+            )
+        );
+
+
+    let mejor =
+        null;
+
+
+    for (
+        const item
+        of resultados
+    ) {
+
+        const titulo =
+            normalize(
+                item.titulo
+            );
+
+
+        if (
+            !titulo
+        ) {
+
+            continue;
+
+        }
+
+
+        let score =
+            0;
+
+
+        // Coincidencia exacta
+        if (
+            titulo ===
+            target
+        ) {
+
+            score +=
+                150;
+
+        }
+
+
+        // Contiene nombre completo
+        if (
+            titulo.includes(
+                target
+            )
+        ) {
+
+            score +=
+                110;
+
+        }
+
+
+        // Misma base
+        if (
+            base &&
+            titulo.includes(
+                base
+            )
+        ) {
+
+            score +=
+                100;
+
+        }
+
+
+        // Misma marca
+        if (
+            marca &&
+            titulo.includes(
+                marca
+            )
+        ) {
+
+            score +=
+                45;
+
+        }
+
+
+        // Comparar palabras de la base
+        const tokens =
+            base.split(
+                " "
+            )
+            .filter(
+                Boolean
+            );
+
+
+        let hits =
+            0;
+
+
+        for (
+            const token
+            of tokens
+        ) {
+
+            if (
+                titulo.includes(
+                    token
+                )
+            ) {
+
+                hits++;
+
+            }
+
+        }
+
+
+        if (
+            tokens.length
+        ) {
+
+            score +=
+                Math.round(
+                    (
+                        hits /
+                        tokens.length
+                    ) *
+                    70
+                );
+
+        }
+
+
+        // Favor etiqueta
+        if (
+            titulo.includes(
+                "etiqueta"
+            )
+        ) {
+
+            score +=
+                10;
+
+        }
+
+
+        if (
+            !mejor ||
+            score >
+                mejor.score
+        ) {
+
+            mejor =
+            {
+
+                titulo:
+                    item.titulo,
+
+                url:
+                    item.url,
+
+                score:
+                    score
+
+            };
+
+        }
+
+    }
+
+
+    if (
+        !mejor ||
+        mejor.score <
+            70
+    ) {
+
+        return null;
+
+    }
+
+
+    return mejor;
+
+}
+
+
+// ======================================================
+// BUSCAR POR SLUG
+// ======================================================
+
+async function buscarPorSlugs(
+    nombre
+) {
+
+    const base =
+        removeFormulation(
+            limpiarNombre(
+                nombre
+            )
+        );
+
+
+    const marca =
+        removeNumbers(
+            base
+        );
+
+
+    const posibilidades =
+        [];
+
+
+    agregarSlug(
+        posibilidades,
+        base
+    );
+
+
+    agregarSlug(
+        posibilidades,
+        `${base}-sp`
+    );
+
+
+    agregarSlug(
+        posibilidades,
+        `${base}-ps`
+    );
+
+
+    agregarSlug(
+        posibilidades,
+        `${marca}-sp`
+    );
+
+
+    agregarSlug(
+        posibilidades,
+        `${marca}-ps`
+    );
+
+
+    agregarSlug(
+        posibilidades,
+        `${marca}-75-sp`
+    );
+
+
+    agregarSlug(
+        posibilidades,
+        `${marca}-75-ps`
+    );
+
+
+    console.log(
+        "SLUGS:",
+        JSON.stringify(
+            posibilidades
+        )
+    );
+
+
+    for (
+        const slug
+        of posibilidades
+    ) {
+
+        const url =
+            `${SAG_CONTENT_URL}/${slug}`;
+
+
+        try {
+
+            const html =
+                await fetchText(
+                    url,
+                    WEB_TIMEOUT_MS
+                );
+
+
+            const texto =
+                normalize(
+                    stripHtml(
+                        html
+                    )
+                );
+
+
+            const marcaN =
+                normalize(
+                    marca
+                );
+
+
+            if (
+                texto.includes(
+                    marcaN
+                )
+            ) {
+
+                return {
+
+                    titulo:
+                        extraerTitulo(
+                            html
+                        ) ||
+                        slug.replace(
+                            /-/g,
+                            " "
+                        ),
+
+                    url:
+                        url,
+
+                    score:
+                        100
+
+                };
+
+            }
+
+        } catch (
+            error
+        ) {
+
+            console.log(
+                "Slug no disponible:",
+                slug
+            );
+
+        }
+
+    }
+
+
+    return null;
+
+}
+
+
+// ======================================================
+// SLUG
+// ======================================================
+
+function agregarSlug(
+    lista,
+    texto
+) {
+
+    if (
+        !texto
+    ) {
+
+        return;
+
+    }
+
+
+    const slug =
+        normalize(
+            texto
+        )
+        .replace(
+            /\s+/g,
+            "-"
+        );
+
+
+    if (
+        slug &&
+        !lista.includes(
+            slug
+        )
+    ) {
+
+        lista.push(
+            slug
+        );
+
+    }
+
+}
+
+
+// ======================================================
+// ETAPA 3
+// LEER DOCUMENTO
+// ======================================================
+
+async function leerDocumento(
+    url
+) {
+
+    if (
+        !url
+    ) {
+
+        return "";
+
+    }
+
+
+    console.log(
+        "DOCUMENTO:",
+        url
+    );
+
+
+    // --------------------------------------------------
+    // PDF
+    // --------------------------------------------------
+
+    if (
+        /\.pdf(?:\?|$)/i.test(
+            url
+        )
+    ) {
+
+        const jinaURL =
+            JINA_PREFIX +
+            url;
+
+
+        console.log(
+            "JINA PDF:",
+            jinaURL
+        );
+
+
+        try {
+
+            const texto =
+                await fetchText(
+                    jinaURL,
+                    WEB_TIMEOUT_MS
+                );
+
+
+            if (
+                texto &&
+                texto.length >
+                    100
+            ) {
+
+                return texto.slice(
+                    0,
+                    MAX_DOCUMENT_CHARS
+                );
+
+            }
+
+        } catch (
+            error
+        ) {
+
+            console.error(
+                "Error leyendo PDF:",
+                error.message
+            );
+
+        }
+
+
+        return "";
+
+    }
+
+
+    // --------------------------------------------------
+    // HTML
+    // --------------------------------------------------
+
+    try {
+
+        const html =
+            await fetchText(
+                url,
+                WEB_TIMEOUT_MS
+            );
+
+
+        return cleanText(
+            stripHtml(
+                html
+            )
+        ).slice(
+            0,
+            MAX_DOCUMENT_CHARS
+        );
+
+    } catch (
+        error
+    ) {
+
+        console.error(
+            "Error HTML:",
+            error.message
+        );
+
+        return "";
+
+    }
+
+}
+
+
+// ======================================================
+// ETAPA 4
+// INTERPRETAR PDF
+// ======================================================
+
+async function interpretarPDF(
+    identificacion,
+    documento
+) {
+
+    const prompt = `
+
+Eres BÍO IA.
+
+Ahora dispones de un documento oficial
+obtenido desde SAG Chile.
+
+Tu tarea es extraer solamente los datos
+que BIO necesita para completar el formulario.
+
+La documentación SAG tiene prioridad sobre
+la identificación realizada desde la fotografía.
+
+PRODUCTO IDENTIFICADO EN LA FOTO:
+
+${JSON.stringify(
+    identificacion
+)}
+
+=========================================
+DATOS QUE DEBES ENTREGAR
+=========================================
+
+1. Nombre comercial
+2. Ingrediente activo
+3. Concentración
+4. Modo de acción
+5. Función técnica
+6. TODAS las plagas y enfermedades objetivo
+
+=========================================
+MODO DE ACCIÓN
+=========================================
+
+Busca expresamente dentro del documento:
+
+- sistémico
+- sistémica
+- contacto
+- acción de contacto
+- ingestión
+- acción de ingestión
+- digestivo
+
+Si el documento dice:
+
+"sistémico con acción de contacto e ingestión"
+
+devuelve:
+
+[
+  "sistemico",
+  "contacto",
+  "digestivo"
+]
+
+=========================================
+FUNCIÓN
+=========================================
+
+Identifica:
+
+- insecticida
+- fungicida
+- herbicida
+- acaricida
+- nematicida
+- otras funciones claramente indicadas
+
+=========================================
+PLAGAS
+=========================================
+
+Este punto es MUY IMPORTANTE.
+
+Busca dentro del CUADRO DE INSTRUCCIONES
+DE USO y extrae TODAS las plagas,
+enfermedades y organismos objetivo.
+
+No limites arbitrariamente la cantidad.
+
+Conserva nombres comunes y científicos
+cuando ambos aparezcan.
+
+Ejemplo:
+
+[
+  "Mosca blanca",
+  "Trips",
+  "Liriomyza sativa",
+  "Pulgón verde",
+  "Cuncunilla"
+]
+
+=========================================
+NO DEBES ENTREGAR
+=========================================
+
+NO entregues:
+
+- dosis
+- dosis por hectárea
+- dosis por 100 L
+- carencia
+- reingreso
+- fabricante
+- formulación
+- grupo químico
+- compatibilidad
+
+Aunque estén presentes en el documento,
+BIO NO necesita esos datos en esta etapa.
+
+=========================================
+RESPUESTA
+=========================================
+
+Devuelve SOLO JSON.
+
+Estructura exacta:
+
+{
+  "tipo_registro": "quimico",
+  "nombre": "",
+  "ingrediente_activo": "",
+  "concentracion": "",
+  "modo_accion": [],
+  "funcion": [],
+  "plagas_objetivo": []
+}
+
+Si un dato no está disponible:
+
+texto = "No encontrado"
+
+lista = []
+
+DOCUMENTACIÓN SAG:
+
+${documento}
+
+`;
+
+
+    const resultado =
+        await llamarOpenRouterTexto(
+            prompt
+        );
+
+
+    console.log(
+        "OpenRouter PDF HTTP:",
+        resultado.status
+    );
+
+
+    console.log(
+        "OpenRouter PDF modelo:",
+        resultado.model
+    );
+
+
+    console.log(
+        "RAW PDF:"
+    );
+
+    console.log(
+        resultado.text
+    );
+
+
+    return parseJSON(
+        resultado.text
+    );
+
+}
+
+
+// ======================================================
+// OPENROUTER CON IMAGEN
 // ======================================================
 
 async function llamarOpenRouter(
     prompt,
-    image,
+    imageBase64,
     mimeType
 ) {
 
-    const payload = {
+    return llamarOpenRouterInterno(
+        prompt,
+        [
+            {
 
-        model:
-            MODEL,
+                type:
+                    "image_url",
 
-        temperature:
-            0.1,
+                image_url:
+                {
 
-        response_format:
-        {
-            type:
-                "json_object"
-        },
+                    url:
+                        `data:${mimeType};base64,${imageBase64}`
 
-        messages:
+                }
+
+            }
+        ]
+    );
+
+}
+
+
+// ======================================================
+// OPENROUTER TEXTO
+// ======================================================
+
+async function llamarOpenRouterTexto(
+    prompt
+) {
+
+    return llamarOpenRouterInterno(
+        prompt,
+        []
+    );
+
+}
+
+
+// ======================================================
+// OPENROUTER INTERNO
+// ======================================================
+
+async function llamarOpenRouterInterno(
+    prompt,
+    elementos
+) {
+
+    const content =
         [
 
             {
 
-                role:
-                    "user",
+                type:
+                    "text",
 
-                content:
-                [
-
-                    {
-
-                        type:
-                            "text",
-
-                        text:
-                            prompt
-
-                    },
-
-                    {
-
-                        type:
-                            "image_url",
-
-                        image_url:
-                        {
-
-                            url:
-                                "data:" +
-                                mimeType +
-                                ";base64," +
-                                image
-
-                        }
-
-                    }
-
-                ]
+                text:
+                    prompt
 
             }
 
-        ]
+        ];
 
-    };
+
+    if (
+        elementos.length
+    ) {
+
+        content.push(
+            ...elementos
+        );
+
+    }
 
 
     const controller =
         new AbortController();
 
 
-    const timeout =
+    const timer =
         setTimeout(
-            () => {
-                controller.abort();
-            },
-            TIMEOUT_MS
+            () =>
+                controller.abort(),
+            AI_TIMEOUT_MS
         );
 
 
@@ -531,20 +2078,50 @@ async function llamarOpenRouter(
                             "application/json",
 
                         "Authorization":
-                            "Bearer " +
-                            API_KEY,
+                            `Bearer ${API_KEY}`,
 
                         "HTTP-Referer":
                             "https://bio-ia-2026.netlify.app",
 
                         "X-Title":
-                            "BÍO IA"
+                            "BÍO IA V11"
 
                     },
 
                     body:
                         JSON.stringify(
-                            payload
+                            {
+
+                                model:
+                                    MODEL,
+
+                                temperature:
+                                    0.1,
+
+                                response_format:
+                                {
+
+                                    type:
+                                        "json_object"
+
+                                },
+
+                                messages:
+                                [
+
+                                    {
+
+                                        role:
+                                            "user",
+
+                                        content:
+                                            content
+
+                                    }
+
+                                ]
+
+                            }
                         ),
 
                     signal:
@@ -558,38 +2135,46 @@ async function llamarOpenRouter(
             await response.text();
 
 
-        let data;
+        const data =
+            safeJSON(
+                raw
+            );
 
 
-        try {
+        console.log(
+            "OpenRouter HTTP:",
+            response.status
+        );
 
-            data =
-                JSON.parse(
-                    raw
-                );
 
-        } catch {
-
-            data =
-            {
-                raw:
-                    raw
-            };
-
-        }
+        console.log(
+            "OpenRouter modelo:",
+            data?.model ||
+                MODEL
+        );
 
 
         if (
             !response.ok
         ) {
 
-            const mensaje =
-                data?.error?.message ||
-                `OpenRouter HTTP ${response.status}`;
+            console.error(
+                "OpenRouter ERROR:"
+            );
+
+            console.error(
+                JSON.stringify(
+                    data?.error ||
+                    data,
+                    null,
+                    2
+                )
+            );
 
 
             throw new Error(
-                mensaje
+                data?.error?.message ||
+                `OpenRouter HTTP ${response.status}`
             );
 
         }
@@ -601,10 +2186,12 @@ async function llamarOpenRouter(
             );
 
 
-        if (!text) {
+        if (
+            !text
+        ) {
 
             throw new Error(
-                "OpenRouter no devolvió contenido."
+                "OpenRouter respondió sin contenido."
             );
 
         }
@@ -612,19 +2199,21 @@ async function llamarOpenRouter(
 
         return {
 
-            text:
-                text,
+            status:
+                response.status,
 
             model:
                 data?.model ||
                 MODEL,
 
-            status:
-                response.status
+            text:
+                text
 
         };
 
-    } catch (error) {
+    } catch (
+        error
+    ) {
 
         if (
             error?.name ===
@@ -632,17 +2221,18 @@ async function llamarOpenRouter(
         ) {
 
             throw new Error(
-                "OpenRouter superó los 20 segundos de espera."
+                `OpenRouter superó el límite de ${AI_TIMEOUT_MS / 1000} segundos.`
             );
 
         }
+
 
         throw error;
 
     } finally {
 
         clearTimeout(
-            timeout
+            timer
         );
 
     }
@@ -651,7 +2241,7 @@ async function llamarOpenRouter(
 
 
 // ======================================================
-// EXTRAER TEXTO
+// TEXTO DE RESPUESTA
 // ======================================================
 
 function extraerTexto(
@@ -684,8 +2274,8 @@ function extraerTexto(
 
         return content
             .map(
-                item =>
-                    item?.text ||
+                x =>
+                    x?.text ||
                     ""
             )
             .filter(
@@ -705,14 +2295,16 @@ function extraerTexto(
 
 
 // ======================================================
-// EXTRAER JSON
+// JSON
 // ======================================================
 
-function extraerJSON(
-    texto
+function parseJSON(
+    text
 ) {
 
-    if (!texto) {
+    if (
+        !text
+    ) {
 
         throw new Error(
             "La IA no devolvió información."
@@ -721,107 +2313,100 @@ function extraerJSON(
     }
 
 
-    const limpio =
+    let clean =
         String(
-            texto
-        ).trim();
+            text
+        )
+        .trim();
 
 
-    // --------------------------------------------------
-    // JSON directo
-    // --------------------------------------------------
-
-    try {
-
-        const directo =
-            JSON.parse(
-                limpio
-            );
-
-
-        if (
-            directo &&
-            typeof directo ===
-                "object"
-        ) {
-
-            return directo;
-
-        }
-
-    } catch {
-
-        // continuar
-
-    }
-
-
-    // --------------------------------------------------
-    // Buscar objeto JSON
-    // --------------------------------------------------
-
-    const inicio =
-        limpio.indexOf(
-            "{"
+    clean =
+        clean.replace(
+            /^```json\s*/i,
+            ""
         );
 
 
-    const fin =
-        limpio.lastIndexOf(
-            "}"
+    clean =
+        clean.replace(
+            /^```\s*/i,
+            ""
         );
 
 
-    if (
-        inicio ===
-        -1 ||
-        fin ===
-        -1 ||
-        fin <= inicio
-    ) {
-
-        throw new Error(
-            "No se encontró un objeto JSON en la respuesta de la IA."
+    clean =
+        clean.replace(
+            /\s*```$/i,
+            ""
         );
 
-    }
 
-
-    const posible =
-        limpio.substring(
-            inicio,
-            fin + 1
-        );
+    clean =
+        clean.trim();
 
 
     try {
 
         return JSON.parse(
-            posible
+            clean
         );
 
     } catch {
+        // continuar
+    }
 
-        console.error(
-            "JSON recibido:"
+
+    const inicio =
+        clean.indexOf(
+            "{"
         );
 
-        console.error(
-            texto
+
+    const fin =
+        clean.lastIndexOf(
+            "}"
         );
 
 
-        throw new Error(
-            "La respuesta de la IA no tiene un JSON válido."
-        );
+    if (
+        inicio !== -1 &&
+        fin > inicio
+    ) {
+
+        try {
+
+            return JSON.parse(
+                clean.slice(
+                    inicio,
+                    fin + 1
+                )
+            );
+
+        } catch {
+            // continuar
+        }
 
     }
+
+
+    console.error(
+        "JSON recibido:"
+    );
+
+    console.error(
+        text
+    );
+
+
+    throw new Error(
+        "La respuesta de la IA no contiene JSON válido."
+    );
 
 }
 
 
 // ======================================================
-// NORMALIZAR
+// NORMALIZAR DATOS
 // ======================================================
 
 function normalizarDatos(
@@ -843,104 +2428,792 @@ function normalizarDatos(
     }
 
 
-    datos.tipo_registro =
-        "quimico";
-
-
-    const camposTexto =
-        [
-
-            "nombre",
-
-            "ingrediente_activo",
-
-            "concentracion"
-
-        ];
-
-
-    camposTexto.forEach(
-        campo => {
+    const texto =
+        (value) => {
 
             if (
-                typeof datos[campo] !==
-                    "string" ||
-                !datos[campo].trim()
+                typeof value ===
+                    "string" &&
+                value.trim()
             ) {
 
-                datos[campo] =
-                    "No encontrado";
-
-            } else {
-
-                datos[campo] =
-                    datos[campo].trim();
+                return value.trim();
 
             }
 
-        }
-    );
+            return "No encontrado";
+
+        };
 
 
-    const camposLista =
-        [
-
-            "modo_accion",
-
-            "funcion",
-
-            "plagas_objetivo"
-
-        ];
-
-
-    camposLista.forEach(
-        campo => {
+    const lista =
+        (value) => {
 
             if (
-                !Array.isArray(
-                    datos[campo]
+                Array.isArray(
+                    value
                 )
             ) {
 
-                if (
-                    datos[campo]
-                ) {
-
-                    datos[campo] =
-                        [
-                            String(
-                                datos[campo]
-                            ).trim()
-                        ];
-
-                } else {
-
-                    datos[campo] =
-                        [];
-
-                }
+                return [
+                    ...new Set(
+                        value
+                            .map(
+                                x =>
+                                    String(
+                                        x
+                                    ).trim()
+                            )
+                            .filter(
+                                Boolean
+                            )
+                    )
+                ];
 
             }
 
 
-            datos[campo] =
-                datos[campo]
-                    .map(
-                        x =>
-                            String(
-                                x
-                            ).trim()
-                    )
-                    .filter(
-                        Boolean
-                    );
+            if (
+                value
+            ) {
+
+                return [
+                    String(
+                        value
+                    ).trim()
+                ];
+
+            }
+
+
+            return [];
+
+        };
+
+
+    const result =
+    {
+
+        tipo_registro:
+            "quimico",
+
+        nombre:
+            texto(
+                datos.nombre
+            ),
+
+        ingrediente_activo:
+            texto(
+                datos.ingrediente_activo
+            ),
+
+        concentracion:
+            texto(
+                datos.concentracion
+            ),
+
+        modo_accion:
+            normalizarModos(
+                lista(
+                    datos.modo_accion
+                )
+            ),
+
+        funcion:
+            normalizarFunciones(
+                lista(
+                    datos.funcion
+                )
+            ),
+
+        plagas_objetivo:
+            lista(
+                datos.plagas_objetivo
+            )
+
+    };
+
+
+    return result;
+
+}
+
+
+// ======================================================
+// MODOS
+// ======================================================
+
+function normalizarModos(
+    lista
+) {
+
+    return [
+        ...new Set(
+            lista.map(
+                valor => {
+
+                    const t =
+                        normalize(
+                            valor
+                        );
+
+
+                    if (
+                        t.includes(
+                            "sistem"
+                        )
+                    ) {
+
+                        return "sistemico";
+
+                    }
+
+
+                    if (
+                        t.includes(
+                            "contact"
+                        )
+                    ) {
+
+                        return "contacto";
+
+                    }
+
+
+                    if (
+                        t.includes(
+                            "ingest"
+                        ) ||
+                        t.includes(
+                            "digest"
+                        )
+                    ) {
+
+                        return "digestivo";
+
+                    }
+
+
+                    return valor;
+
+                }
+            )
+        )
+    ];
+
+}
+
+
+// ======================================================
+// FUNCIONES
+// ======================================================
+
+function normalizarFunciones(
+    lista
+) {
+
+    return [
+        ...new Set(
+            lista.map(
+                valor => {
+
+                    const t =
+                        normalize(
+                            valor
+                        );
+
+
+                    if (
+                        t.includes(
+                            "insect"
+                        )
+                    ) {
+
+                        return "insecticida";
+
+                    }
+
+
+                    if (
+                        t.includes(
+                            "fung"
+                        )
+                    ) {
+
+                        return "fungicida";
+
+                    }
+
+
+                    if (
+                        t.includes(
+                            "herbic"
+                        )
+                    ) {
+
+                        return "herbicida";
+
+                    }
+
+
+                    if (
+                        t.includes(
+                            "acar"
+                        )
+                    ) {
+
+                        return "acaricida";
+
+                    }
+
+
+                    if (
+                        t.includes(
+                            "nemat"
+                        )
+                    ) {
+
+                        return "nematicida";
+
+                    }
+
+
+                    if (
+                        t.includes(
+                            "estimul"
+                        )
+                    ) {
+
+                        return "estimulante";
+
+                    }
+
+
+                    return valor;
+
+                }
+            )
+        )
+    ];
+
+}
+
+
+// ======================================================
+// NOMBRES
+// ======================================================
+
+function limpiarNombre(
+    nombre
+) {
+
+    return String(
+        nombre || ""
+    )
+        .replace(
+            /[®™]/g,
+            ""
+        )
+        .replace(
+            /\s+/g,
+            " "
+        )
+        .trim();
+
+}
+
+
+// ======================================================
+// FORMULACIÓN
+// ======================================================
+
+function removeFormulation(
+    texto
+) {
+
+    return String(
+        texto || ""
+    )
+        .replace(
+            /\b(?:WP|SP|PS|PW|WG|SC|SL|EC|SG|SE|EW|OD|CS|GR|FS|ME)\b/gi,
+            ""
+        )
+        .replace(
+            /\s+/g,
+            " "
+        )
+        .trim();
+
+}
+
+
+// ======================================================
+// NÚMEROS
+// ======================================================
+
+function removeNumbers(
+    texto
+) {
+
+    return String(
+        texto || ""
+    )
+        .replace(
+            /\b\d+(?:[.,]\d+)?\b/g,
+            ""
+        )
+        .replace(
+            /\s+/g,
+            " "
+        )
+        .trim();
+
+}
+
+
+// ======================================================
+// NORMALIZACIÓN TEXTO
+// ======================================================
+
+function normalize(
+    texto
+) {
+
+    return String(
+        texto || ""
+    )
+        .normalize(
+            "NFD"
+        )
+        .replace(
+            /[\u0300-\u036f]/g,
+            ""
+        )
+        .toLowerCase()
+        .replace(
+            /[^a-z0-9]+/g,
+            " "
+        )
+        .trim();
+
+}
+
+
+// ======================================================
+// HTML
+// ======================================================
+
+function stripHtml(
+    html
+) {
+
+    return String(
+        html || ""
+    )
+        .replace(
+            /<script[\s\S]*?<\/script>/gi,
+            " "
+        )
+        .replace(
+            /<style[\s\S]*?<\/style>/gi,
+            " "
+        )
+        .replace(
+            /<[^>]+>/g,
+            " "
+        );
+
+}
+
+
+function cleanText(
+    texto
+) {
+
+    return String(
+        texto || ""
+    )
+        .replace(
+            /\s+/g,
+            " "
+        )
+        .trim();
+
+}
+
+
+function decodeHtml(
+    texto
+) {
+
+    return String(
+        texto || ""
+    )
+        .replace(
+            /&amp;/gi,
+            "&"
+        )
+        .replace(
+            /&quot;/gi,
+            '"'
+        )
+        .replace(
+            /&#39;/gi,
+            "'"
+        )
+        .replace(
+            /&nbsp;/gi,
+            " "
+        );
+
+}
+
+
+// ======================================================
+// LINKS SAG
+// ======================================================
+
+function extraerLinksSAG(
+    html
+) {
+
+    const resultados =
+        [];
+
+
+    const regex =
+        /<a[^>]+href=["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi;
+
+
+    let match;
+
+
+    while (
+        (
+            match =
+                regex.exec(
+                    html ||
+                    ""
+                )
+        ) !== null
+    ) {
+
+        const url =
+            toAbsoluteSAG(
+                decodeHtml(
+                    match[1]
+                )
+            );
+
+
+        const titulo =
+            cleanText(
+                stripHtml(
+                    match[2]
+                )
+            );
+
+
+        if (
+            url.includes(
+                "/content/"
+            ) &&
+            titulo
+        ) {
+
+            resultados.push(
+                {
+
+                    titulo:
+                        titulo,
+
+                    url:
+                        url
+
+                }
+            );
+
+        }
+
+    }
+
+
+    return resultados;
+
+}
+
+
+// ======================================================
+// DUPLICADOS
+// ======================================================
+
+function eliminarDuplicados(
+    items
+) {
+
+    const vistos =
+        new Set();
+
+
+    return items.filter(
+        item => {
+
+            const key =
+                item.url +
+                "|" +
+                normalize(
+                    item.titulo
+                );
+
+
+            if (
+                vistos.has(
+                    key
+                )
+            ) {
+
+                return false;
+
+            }
+
+
+            vistos.add(
+                key
+            );
+
+
+            return true;
 
         }
     );
 
+}
 
-    return datos;
+
+// ======================================================
+// PDF
+// ======================================================
+
+function encontrarPDF(
+    html
+) {
+
+    const texto =
+        String(
+            html || ""
+        );
+
+
+    const hrefRegex =
+        /href\s*=\s*["']([^"']+)["']/gi;
+
+
+    let match;
+
+
+    while (
+        (
+            match =
+                hrefRegex.exec(
+                    texto
+                )
+        ) !== null
+    ) {
+
+        const href =
+            decodeHtml(
+                match[1]
+            );
+
+
+        if (
+            /\.pdf(?:\?|$)/i.test(
+                href
+            )
+        ) {
+
+            return toAbsoluteSAG(
+                href
+            );
+
+        }
+
+    }
+
+
+    const urlRegex =
+        /https?:\/\/[^\s"'<>]+\.pdf(?:\?[^\s"'<>]*)?/gi;
+
+
+    const urls =
+        texto.match(
+            urlRegex
+        );
+
+
+    if (
+        urls &&
+        urls.length
+    ) {
+
+        return decodeHtml(
+            urls[0]
+        );
+
+    }
+
+
+    return "";
+
+}
+
+
+// ======================================================
+// URL SAG
+// ======================================================
+
+function toAbsoluteSAG(
+    href
+) {
+
+    if (
+        !href
+    ) {
+
+        return "";
+
+    }
+
+
+    if (
+        /^https?:\/\//i.test(
+            href
+        )
+    ) {
+
+        return href;
+
+    }
+
+
+    if (
+        href.startsWith(
+            "//"
+        )
+    ) {
+
+        return "https:" +
+            href;
+
+    }
+
+
+    if (
+        href.startsWith(
+            "/"
+        )
+    ) {
+
+        return SAG_DOMAIN +
+            href;
+
+    }
+
+
+    return SAG_DOMAIN +
+        "/" +
+        href.replace(
+            /^\/+/,
+            ""
+        );
+
+}
+
+
+// ======================================================
+// TÍTULO
+// ======================================================
+
+function extraerTitulo(
+    html
+) {
+
+    const match =
+        String(
+            html || ""
+        )
+        .match(
+            /<title[^>]*>([\s\S]*?)<\/title>/i
+        );
+
+
+    if (
+        match &&
+        match[1]
+    ) {
+
+        return cleanText(
+            stripHtml(
+                match[1]
+            )
+        );
+
+    }
+
+
+    return "";
+
+}
+
+
+// ======================================================
+// SAFE JSON
+// ======================================================
+
+function safeJSON(
+    raw
+) {
+
+    try {
+
+        return JSON.parse(
+            raw
+        );
+
+    } catch {
+
+        return {
+            raw:
+                raw
+        };
+
+    }
+
+}
+
+
+// ======================================================
+// BODY
+// ======================================================
+
+function parsearBody(
+    raw
+) {
+
+    try {
+
+        return JSON.parse(
+            raw ||
+            "{}"
+        );
+
+    } catch {
+
+        throw new Error(
+            "El cuerpo recibido no es JSON válido."
+        );
+
+    }
 
 }
 
@@ -949,7 +3222,7 @@ function normalizarDatos(
 // RESPUESTA
 // ======================================================
 
-function respuesta(
+function responder(
     statusCode,
     body
 ) {
