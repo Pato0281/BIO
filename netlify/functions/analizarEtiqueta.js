@@ -1,30 +1,20 @@
 // ======================================================
-// BÍO IA V10.1
+// BÍO IA V10.2
 // analizarEtiqueta.js
 // ======================================================
 //
-// FUNCIÓN ÚNICA:
+// RESPONSABILIDAD:
 //
-// FOTO
-//   ↓
-// OpenRouter
-//   ↓
-// MiniMax M3 Free
-//   ↓
-// Identificación de producto
-//   ↓
-// JSON
-//
-// LA IA SOLO RELLENA:
+// IDENTIFICAR INFORMACIÓN VISIBLE EN LA FOTO
 //
 // ✅ Nombre comercial
 // ✅ Ingrediente activo
 // ✅ Concentración
 // ✅ Modo de acción
-// ✅ Función técnica
+// ✅ Función
 // ✅ Plagas / enfermedades
 //
-// NO RELLENA:
+// NO IDENTIFICA:
 //
 // ❌ Dosis
 // ❌ Carencia
@@ -35,18 +25,12 @@
 //
 // ======================================================
 
-
-// ======================================================
-// CONFIGURACIÓN
-// ======================================================
-
-const API_KEY =
-    process.env.OPENROUTER_API_KEY;
+const API_KEY = process.env.OPENROUTER_API_KEY;
 
 const OPENROUTER_URL =
     "https://openrouter.ai/api/v1/chat/completions";
 
-const MODELO =
+const MODEL =
     "minimax/minimax-m3:free";
 
 const TIMEOUT_MS =
@@ -54,40 +38,43 @@ const TIMEOUT_MS =
 
 
 // ======================================================
-// HANDLER PRINCIPAL
+// HANDLER
 // ======================================================
 
 exports.handler = async (event) => {
 
-    console.log(
-        "=========================================="
-    );
-
-    console.log(
-        "BÍO IA V10.1 - INICIO"
-    );
-
-    console.log(
-        "=========================================="
-    );
+    console.log("======================================");
+    console.log("BÍO IA V10.2");
+    console.log("INICIO");
+    console.log("======================================");
 
 
-    // --------------------------------------------------
-    // MÉTODO
-    // --------------------------------------------------
+    if (event.httpMethod !== "POST") {
 
-    if (
-        event.httpMethod !== "POST"
-    ) {
-
-        return responder(
+        return respuesta(
             405,
             {
-                ok:
-                    false,
-
+                ok: false,
                 mensaje:
-                    "Método no permitido. Use POST."
+                    "Método no permitido."
+            }
+        );
+
+    }
+
+
+    if (!API_KEY) {
+
+        console.error(
+            "Falta OPENROUTER_API_KEY."
+        );
+
+        return respuesta(
+            500,
+            {
+                ok: false,
+                mensaje:
+                    "OPENROUTER_API_KEY no está configurada."
             }
         );
 
@@ -96,105 +83,67 @@ exports.handler = async (event) => {
 
     try {
 
-        // ------------------------------------------------
-        // API KEY
-        // ------------------------------------------------
-
-        if (!API_KEY) {
-
-            console.error(
-                "ERROR: OPENROUTER_API_KEY no configurada."
-            );
-
-            return responder(
-                500,
-                {
-
-                    ok:
-                        false,
-
-                    mensaje:
-                        "OPENROUTER_API_KEY no está configurada en Netlify."
-
-                }
-            );
-
-        }
-
-
-        // ------------------------------------------------
+        // ==================================================
         // BODY
-        // ------------------------------------------------
+        // ==================================================
 
         let body;
-
 
         try {
 
             body =
                 JSON.parse(
-                    event.body ||
-                    "{}"
+                    event.body || "{}"
                 );
 
         } catch {
 
-            return responder(
+            return respuesta(
                 400,
                 {
-
-                    ok:
-                        false,
-
+                    ok: false,
                     mensaje:
-                        "El cuerpo de la solicitud no contiene JSON válido."
-
+                        "El cuerpo recibido no es JSON válido."
                 }
             );
 
         }
 
 
-        let imageBase64 =
+        let image =
             body.image ||
             body.imageBase64 ||
             "";
 
 
-        if (!imageBase64) {
+        if (!image) {
 
-            return responder(
+            return respuesta(
                 400,
                 {
-
-                    ok:
-                        false,
-
+                    ok: false,
                     mensaje:
                         "No se recibió ninguna imagen."
-
                 }
             );
 
         }
 
 
-        // ------------------------------------------------
-        // MIME TYPE
-        // ------------------------------------------------
+        // ==================================================
+        // MIME
+        // ==================================================
 
         let mimeType =
             "image/jpeg";
 
 
         if (
-            imageBase64.startsWith(
-                "data:"
-            )
+            image.startsWith("data:")
         ) {
 
             const match =
-                imageBase64.match(
+                image.match(
                     /^data:([^;]+);base64,/
                 );
 
@@ -210,30 +159,34 @@ exports.handler = async (event) => {
             }
 
 
-            imageBase64 =
-                imageBase64.substring(
-                    imageBase64.indexOf(",") + 1
-                );
+            const coma =
+                image.indexOf(",");
+
+
+            if (
+                coma !== -1
+            ) {
+
+                image =
+                    image.substring(
+                        coma + 1
+                    );
+
+            }
 
         }
 
 
         if (
-            !mimeType.startsWith(
-                "image/"
-            )
+            !mimeType.startsWith("image/")
         ) {
 
-            return responder(
+            return respuesta(
                 400,
                 {
-
-                    ok:
-                        false,
-
+                    ok: false,
                     mensaje:
-                        `Tipo de archivo no soportado: ${mimeType}`
-
+                        "El archivo no es una imagen válida."
                 }
             );
 
@@ -246,100 +199,59 @@ exports.handler = async (event) => {
         );
 
         console.log(
-            "Tamaño Base64:",
-            imageBase64.length
+            "Tamaño:",
+            image.length
         );
 
 
-        // =================================================
+        // ==================================================
         // PROMPT
-        // =================================================
+        // ==================================================
 
         const prompt = `
+Eres BÍO IA.
 
-Eres BÍO IA, especialista en identificación
-de productos fitosanitarios agrícolas.
+Analiza la fotografía de una etiqueta o envase
+de un producto fitosanitario agrícola.
 
-Analiza cuidadosamente la fotografía de la
-etiqueta o envase.
+Tu trabajo es IDENTIFICAR solamente la información
+que pueda verse o leerse razonablemente en la imagen.
 
-Tu objetivo es identificar el producto con
-la mayor precisión posible.
+NO INVENTES DATOS.
 
-IMPORTANTE:
-
-NO INVENTES información.
-
-Si un dato no aparece o no puede identificarse
-con suficiente seguridad, devuelve "No encontrado"
-o un arreglo vacío.
-
-=========================================
-DATOS QUE SÍ DEBES IDENTIFICAR
-=========================================
+DATOS QUE DEBES IDENTIFICAR:
 
 1. Nombre comercial del producto.
-
 2. Ingrediente activo.
-
 3. Concentración.
-
 4. Modo de acción.
-
 5. Función técnica.
-
 6. Plagas o enfermedades objetivo.
 
-=========================================
-MODO DE ACCIÓN
-=========================================
+MODO DE ACCIÓN:
 
-Busca expresamente información como:
+Utiliza únicamente cuando exista evidencia visible:
 
-- Sistémico
-- Contacto
-- Ingestión
-- Digestivo
+- contacto
+- sistémico
+- ingestión
+- digestivo
 
-Si la etiqueta indica más de uno,
-devuelve todos.
+FUNCIÓN:
 
-Ejemplos:
-
-"acción sistémica" → "sistemico"
-
-"acción de contacto" → "contacto"
-
-"acción por ingestión" → "digestivo"
-
-=========================================
-FUNCIÓN TÉCNICA
-=========================================
-
-Identifica cuando corresponda:
+Utiliza cuando exista evidencia:
 
 - insecticida
 - fungicida
 - herbicida
 - estimulante
 
-Si aparecen varias funciones,
-devuélvelas todas.
+PLAGAS Y ENFERMEDADES:
 
-=========================================
-PLAGAS / ENFERMEDADES
-=========================================
+Extrae solamente las que sean visibles
+o claramente legibles en la imagen.
 
-Extrae las plagas o enfermedades
-que aparezcan claramente en la etiqueta.
-
-No inventes nombres.
-
-=========================================
-IMPORTANTE
-=========================================
-
-NO debes entregar:
+NO DEBES ENTREGAR:
 
 - dosis
 - dosis baja
@@ -350,37 +262,15 @@ NO debes entregar:
 - formulación
 - grupo químico
 
-Esos datos serán manejados por la aplicación.
+Esos datos serán manejados directamente
+por la aplicación.
 
-=========================================
-REGISTRO DE OTRO PAÍS
-=========================================
+Si aparece un registro de SENASA u otro organismo
+de otro país, NO lo interpretes como registro SAG.
 
-Si aparece un registro como:
+RESPONDE SOLAMENTE CON UN OBJETO JSON.
 
-SENASA
-Perú
-Argentina
-Brasil
-etc.
-
-NO lo interpretes como registro SAG Chile.
-
-No necesitamos registrar ese dato.
-
-=========================================
-RESPUESTA
-=========================================
-
-Devuelve EXCLUSIVAMENTE un objeto JSON.
-
-NO uses Markdown.
-
-NO uses ```json.
-
-NO agregues explicaciones.
-
-Usa exactamente esta estructura:
+Usa exactamente estos campos:
 
 {
   "tipo_registro": "quimico",
@@ -392,129 +282,124 @@ Usa exactamente esta estructura:
   "plagas_objetivo": []
 }
 
-Si no puedes identificar un dato:
+Cuando un dato no pueda identificarse:
 
-texto:
+campo de texto:
 "No encontrado"
 
-array:
+campo de lista:
 []
 
+No agregues explicaciones adicionales.
 `;
 
 
-
-        // =================================================
+        // ==================================================
         // OPENROUTER
-        // =================================================
+        // ==================================================
 
         console.log(
-            "Enviando imagen a OpenRouter..."
+            "Enviando solicitud a OpenRouter..."
         );
 
         console.log(
             "Modelo:",
-            MODELO
+            MODEL
         );
 
 
         const resultado =
             await llamarOpenRouter(
                 prompt,
-                imageBase64,
+                image,
                 mimeType
             );
 
 
         console.log(
-            "=========================================="
+            "OpenRouter HTTP:",
+            resultado.status
         );
 
         console.log(
-            "RESPUESTA RAW OPENROUTER"
+            "Modelo utilizado:",
+            resultado.model
+        );
+
+
+        console.log(
+            "======================================"
         );
 
         console.log(
-            "=========================================="
+            "RESPUESTA RAW"
         );
 
         console.log(
-            resultado.texto
+            "======================================"
         );
 
         console.log(
-            "=========================================="
+            resultado.text
+        );
+
+        console.log(
+            "======================================"
         );
 
 
-        // =================================================
+        // ==================================================
         // JSON
-        // =================================================
+        // ==================================================
 
         const datos =
-            parsearJSON(
-                resultado.texto
-            );
-
-
-        const datosFinales =
-            normalizarDatos(
-                datos
+            extraerJSON(
+                resultado.text
             );
 
 
         console.log(
-            "=========================================="
-        );
-
-        console.log(
-            "DATOS IDENTIFICADOS"
+            "DATOS IDENTIFICADOS:"
         );
 
         console.log(
             JSON.stringify(
-                datosFinales,
+                datos,
                 null,
                 2
             )
         );
 
-        console.log(
-            "=========================================="
-        );
 
-
-        return responder(
+        return respuesta(
             200,
             {
 
-                ok:
-                    true,
+                ok: true,
 
                 proveedor:
                     "OpenRouter",
 
                 modelo:
-                    resultado.modelo ||
-                    MODELO,
+                    resultado.model,
 
                 datos:
-                    datosFinales
+                    normalizarDatos(
+                        datos
+                    )
 
             }
         );
 
 
-    } catch (
-        error
-    ) {
+    } catch (error) {
 
         console.error(
-            "=========================================="
+            "======================================"
         );
 
         console.error(
-            "ERROR BÍO IA V10.1"
+            "ERROR BÍO IA V10.2"
         );
 
         console.error(
@@ -522,26 +407,19 @@ array:
         );
 
         console.error(
-            "=========================================="
+            "======================================"
         );
 
 
-        return responder(
+        return respuesta(
             500,
             {
 
-                ok:
-                    false,
+                ok: false,
 
                 mensaje:
                     error?.message ||
-                    "Error inesperado al procesar la imagen.",
-
-                proveedor:
-                    "OpenRouter",
-
-                modelo:
-                    MODELO
+                    "Error procesando la imagen."
 
             }
         );
@@ -557,87 +435,86 @@ array:
 
 async function llamarOpenRouter(
     prompt,
-    imageBase64,
+    image,
     mimeType
 ) {
 
-    const payload =
+    const payload = {
+
+        model:
+            MODEL,
+
+        temperature:
+            0.1,
+
+        response_format:
         {
+            type:
+                "json_object"
+        },
 
-            model:
-                MODELO,
+        messages:
+        [
 
-            temperature:
-                0.1,
-
-            response_format:
             {
-                type:
-                    "json_object"
-            },
 
-            messages:
-            [
+                role:
+                    "user",
 
-                {
+                content:
+                [
 
-                    role:
-                        "user",
+                    {
 
-                    content:
-                    [
+                        type:
+                            "text",
 
+                        text:
+                            prompt
+
+                    },
+
+                    {
+
+                        type:
+                            "image_url",
+
+                        image_url:
                         {
 
-                            type:
-                                "text",
-
-                            text:
-                                prompt
-
-                        },
-
-                        {
-
-                            type:
-                                "image_url",
-
-                            image_url:
-                            {
-
-                                url:
-                                    `data:${mimeType};base64,${imageBase64}`
-
-                            }
+                            url:
+                                "data:" +
+                                mimeType +
+                                ";base64," +
+                                image
 
                         }
 
-                    ]
+                    }
 
-                }
+                ]
 
-            ]
+            }
 
-        };
+        ]
+
+    };
 
 
     const controller =
         new AbortController();
 
 
-    const timer =
+    const timeout =
         setTimeout(
-            () =>
-                controller.abort(),
+            () => {
+                controller.abort();
+            },
             TIMEOUT_MS
         );
 
 
     try {
-
-        const inicio =
-            Date.now();
-
 
         const response =
             await fetch(
@@ -654,13 +531,14 @@ async function llamarOpenRouter(
                             "application/json",
 
                         "Authorization":
-                            `Bearer ${API_KEY}`,
+                            "Bearer " +
+                            API_KEY,
 
                         "HTTP-Referer":
                             "https://bio-ia-2026.netlify.app",
 
                         "X-Title":
-                            "SanidadApp BIO IA"
+                            "BÍO IA"
 
                     },
 
@@ -674,11 +552,6 @@ async function llamarOpenRouter(
 
                 }
             );
-
-
-        const duracion =
-            Date.now() -
-            inicio;
 
 
         const raw =
@@ -706,61 +579,32 @@ async function llamarOpenRouter(
         }
 
 
-        console.log(
-            "OpenRouter HTTP:",
-            response.status
-        );
-
-
-        console.log(
-            "OpenRouter tiempo:",
-            duracion,
-            "ms"
-        );
-
-
-        console.log(
-            "OpenRouter modelo utilizado:",
-            data?.model ||
-                "No informado"
-        );
-
-
         if (
             !response.ok
         ) {
 
-            console.error(
-                "OpenRouter error:",
-                JSON.stringify(
-                    data?.error ||
-                    data,
-                    null,
-                    2
-                )
-            );
+            const mensaje =
+                data?.error?.message ||
+                `OpenRouter HTTP ${response.status}`;
 
 
             throw new Error(
-                data?.error?.message ||
-                `OpenRouter HTTP ${response.status}`
+                mensaje
             );
 
         }
 
 
-        const texto =
+        const text =
             extraerTexto(
                 data
             );
 
 
-        if (
-            !texto
-        ) {
+        if (!text) {
 
             throw new Error(
-                "OpenRouter respondió correctamente pero no devolvió texto."
+                "OpenRouter no devolvió contenido."
             );
 
         }
@@ -768,21 +612,19 @@ async function llamarOpenRouter(
 
         return {
 
-            texto:
-                texto,
+            text:
+                text,
 
-            modelo:
+            model:
                 data?.model ||
-                MODELO,
+                MODEL,
 
-            data:
-                data
+            status:
+                response.status
 
         };
 
-    } catch (
-        error
-    ) {
+    } catch (error) {
 
         if (
             error?.name ===
@@ -790,18 +632,17 @@ async function llamarOpenRouter(
         ) {
 
             throw new Error(
-                `OpenRouter superó el tiempo máximo de ${TIMEOUT_MS / 1000} segundos.`
+                "OpenRouter superó los 20 segundos de espera."
             );
 
         }
-
 
         throw error;
 
     } finally {
 
         clearTimeout(
-            timer
+            timeout
         );
 
     }
@@ -843,8 +684,8 @@ function extraerTexto(
 
         return content
             .map(
-                part =>
-                    part?.text ||
+                item =>
+                    item?.text ||
                     ""
             )
             .filter(
@@ -864,16 +705,14 @@ function extraerTexto(
 
 
 // ======================================================
-// PARSEAR JSON
+// EXTRAER JSON
 // ======================================================
 
-function parsearJSON(
+function extraerJSON(
     texto
 ) {
 
-    if (
-        !texto
-    ) {
+    if (!texto) {
 
         throw new Error(
             "La IA no devolvió información."
@@ -882,71 +721,43 @@ function parsearJSON(
     }
 
 
-    let limpio =
+    const limpio =
         String(
             texto
-        )
-        .trim();
+        ).trim();
 
 
     // --------------------------------------------------
-    // QUITAR MARKDOWN SI EL MODELO LO ENVÍA
-    // --------------------------------------------------
-
-    limpio =
-        limpio.replace(
-            /^```json\s*/i,
-            ""
-        );
-
-
-    limpio =
-        limpio.replace(
-            /^```\s*/i,
-            ""
-        );
-
-
-    limpio =
-        limpio.replace(
-            /\s*```$/i,
-            ""
-        );
-
-
-    limpio =
-        limpio.trim();
-
-
-    // --------------------------------------------------
-    // JSON DIRECTO
+    // JSON directo
     // --------------------------------------------------
 
     try {
 
-        const resultado =
+        const directo =
             JSON.parse(
                 limpio
             );
 
 
         if (
-            resultado &&
-            typeof resultado ===
+            directo &&
+            typeof directo ===
                 "object"
         ) {
 
-            return resultado;
+            return directo;
 
         }
 
     } catch {
+
         // continuar
+
     }
 
 
     // --------------------------------------------------
-    // BUSCAR OBJETO DENTRO DE LA RESPUESTA
+    // Buscar objeto JSON
     // --------------------------------------------------
 
     const inicio =
@@ -955,9 +766,18 @@ function parsearJSON(
         );
 
 
+    const fin =
+        limpio.lastIndexOf(
+            "}"
+        );
+
+
     if (
         inicio ===
-        -1
+        -1 ||
+        fin ===
+        -1 ||
+        fin <= inicio
     ) {
 
         throw new Error(
@@ -967,165 +787,41 @@ function parsearJSON(
     }
 
 
-    let profundidad =
-        0;
-
-    let dentroString =
-        false;
-
-    let escape =
-        false;
+    const posible =
+        limpio.substring(
+            inicio,
+            fin + 1
+        );
 
 
-    for (
-        let i =
-            inicio;
+    try {
 
-        i <
-            limpio.length;
+        return JSON.parse(
+            posible
+        );
 
-        i++
-    ) {
+    } catch {
 
-        const c =
-            limpio[i];
+        console.error(
+            "JSON recibido:"
+        );
 
-
-        if (
-            dentroString
-        ) {
-
-            if (
-                escape
-            ) {
-
-                escape =
-                    false;
-
-                continue;
-
-            }
+        console.error(
+            texto
+        );
 
 
-            if (
-                c ===
-                "\\"
-            ) {
-
-                escape =
-                    true;
-
-                continue;
-
-            }
-
-
-            if (
-                c ===
-                '"'
-            ) {
-
-                dentroString =
-                    false;
-
-            }
-
-
-            continue;
-
-        }
-
-
-        if (
-            c ===
-            '"'
-        ) {
-
-            dentroString =
-                true;
-
-            continue;
-
-        }
-
-
-        if (
-            c ===
-            "{"
-        ) {
-
-            profundidad++;
-
-        } else if (
-            c ===
-            "}"
-        ) {
-
-            profundidad--;
-
-
-            if (
-                profundidad ===
-                0
-            ) {
-
-                const posible =
-                    limpio.slice(
-                        inicio,
-                        i + 1
-                    );
-
-
-                try {
-
-                    const resultado =
-                        JSON.parse(
-                            posible
-                        );
-
-
-                    if (
-                        resultado &&
-                        typeof resultado ===
-                            "object"
-                    ) {
-
-                        return resultado;
-
-                    }
-
-                } catch {
-                    // continuar
-                }
-
-
-                break;
-
-            }
-
-        }
+        throw new Error(
+            "La respuesta de la IA no tiene un JSON válido."
+        );
 
     }
-
-
-    console.error(
-        "Respuesta JSON inválida:"
-    );
-
-    console.error(
-        texto
-    );
-
-
-    throw new Error(
-        "La respuesta de la IA no tiene un formato JSON válido."
-    );
 
 }
 
 
 // ======================================================
-// NORMALIZAR DATOS
+// NORMALIZAR
 // ======================================================
 
 function normalizarDatos(
@@ -1136,7 +832,9 @@ function normalizarDatos(
         !datos ||
         typeof datos !==
             "object" ||
-        Array.isArray(datos)
+        Array.isArray(
+            datos
+        )
     ) {
 
         datos =
@@ -1145,19 +843,11 @@ function normalizarDatos(
     }
 
 
-    // --------------------------------------------------
-    // TIPO
-    // --------------------------------------------------
-
     datos.tipo_registro =
         "quimico";
 
 
-    // --------------------------------------------------
-    // TEXTOS
-    // --------------------------------------------------
-
-    const textos =
+    const camposTexto =
         [
 
             "nombre",
@@ -1169,35 +859,30 @@ function normalizarDatos(
         ];
 
 
-    for (
-        const campo
-        of textos
-    ) {
+    camposTexto.forEach(
+        campo => {
 
-        if (
-            typeof datos[campo] !==
-                "string" ||
-            !datos[campo].trim()
-        ) {
+            if (
+                typeof datos[campo] !==
+                    "string" ||
+                !datos[campo].trim()
+            ) {
 
-            datos[campo] =
-                "No encontrado";
+                datos[campo] =
+                    "No encontrado";
 
-        } else {
+            } else {
 
-            datos[campo] =
-                datos[campo].trim();
+                datos[campo] =
+                    datos[campo].trim();
+
+            }
 
         }
+    );
 
-    }
 
-
-    // --------------------------------------------------
-    // ARRAYS
-    // --------------------------------------------------
-
-    const arrays =
+    const camposLista =
         [
 
             "modo_accion",
@@ -1209,199 +894,50 @@ function normalizarDatos(
         ];
 
 
-    for (
-        const campo
-        of arrays
-    ) {
-
-        if (
-            !Array.isArray(
-                datos[campo]
-            )
-        ) {
+    camposLista.forEach(
+        campo => {
 
             if (
-                datos[campo] &&
-                String(
+                !Array.isArray(
                     datos[campo]
-                ).trim()
+                )
             ) {
 
-                datos[campo] =
-                    [
-                        String(
-                            datos[campo]
-                        ).trim()
-                    ];
+                if (
+                    datos[campo]
+                ) {
 
-            } else {
+                    datos[campo] =
+                        [
+                            String(
+                                datos[campo]
+                            ).trim()
+                        ];
 
-                datos[campo] =
-                    [];
+                } else {
+
+                    datos[campo] =
+                        [];
+
+                }
 
             }
+
+
+            datos[campo] =
+                datos[campo]
+                    .map(
+                        x =>
+                            String(
+                                x
+                            ).trim()
+                    )
+                    .filter(
+                        Boolean
+                    );
 
         }
-
-
-        datos[campo] =
-            datos[campo]
-                .map(
-                    valor =>
-                        String(
-                            valor
-                        ).trim()
-                )
-                .filter(
-                    Boolean
-                );
-
-    }
-
-
-    // --------------------------------------------------
-    // NORMALIZAR MODO DE ACCIÓN
-    // --------------------------------------------------
-
-    datos.modo_accion =
-        datos.modo_accion.map(
-            modo => {
-
-                const m =
-                    String(
-                        modo
-                    )
-                    .toLowerCase();
-
-
-                if (
-                    m.includes(
-                        "sistem"
-                    )
-                ) {
-
-                    return "sistemico";
-
-                }
-
-
-                if (
-                    m.includes(
-                        "contact"
-                    )
-                ) {
-
-                    return "contacto";
-
-                }
-
-
-                if (
-                    m.includes(
-                        "ingest"
-                    ) ||
-                    m.includes(
-                        "digest"
-                    )
-                ) {
-
-                    return "digestivo";
-
-                }
-
-
-                return modo;
-
-            }
-        );
-
-
-    // --------------------------------------------------
-    // NORMALIZAR FUNCIÓN
-    // --------------------------------------------------
-
-    datos.funcion =
-        datos.funcion.map(
-            funcion => {
-
-                const f =
-                    String(
-                        funcion
-                    )
-                    .toLowerCase()
-                    .trim();
-
-
-                if (
-                    f.includes(
-                        "insect"
-                    )
-                ) {
-
-                    return "insecticida";
-
-                }
-
-
-                if (
-                    f.includes(
-                        "fung"
-                    )
-                ) {
-
-                    return "fungicida";
-
-                }
-
-
-                if (
-                    f.includes(
-                        "herbic"
-                    )
-                ) {
-
-                    return "herbicida";
-
-                }
-
-
-                if (
-                    f.includes(
-                        "estimul"
-                    )
-                ) {
-
-                    return "estimulante";
-
-                }
-
-
-                return funcion;
-
-            }
-        );
-
-
-    // --------------------------------------------------
-    // ELIMINAR DUPLICADOS
-    // --------------------------------------------------
-
-    datos.modo_accion =
-        [...new Set(
-            datos.modo_accion
-        )];
-
-
-    datos.funcion =
-        [...new Set(
-            datos.funcion
-        )];
-
-
-    datos.plagas_objetivo =
-        [...new Set(
-            datos.plagas_objetivo
-        )];
+    );
 
 
     return datos;
@@ -1410,10 +946,10 @@ function normalizarDatos(
 
 
 // ======================================================
-// RESPUESTA NETLIFY
+// RESPUESTA
 // ======================================================
 
-function responder(
+function respuesta(
     statusCode,
     body
 ) {
