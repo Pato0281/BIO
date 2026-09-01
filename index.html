@@ -15,55 +15,72 @@
 <body>
 
     <header>
-        <h1>🌿 SanidadApp</h1>
-        <p>Control de Plagas y Manejo Fitosanitario Completo</p>
 
-        <!-- Botón de estado de administrador -->
-        <div id="admin-bar" style="margin-top: 10px;">
+        <h1>🌿 SanidadApp</h1>
+
+        <p>
+            Control de Plagas y Manejo Fitosanitario Completo
+        </p>
+
+        <div
+            id="admin-bar"
+            style="margin-top:10px;"
+        >
 
             <button
                 id="btn-open-login"
-                class="btn-admin-access">
+                class="btn-admin-access"
+            >
                 🔐 Acceso Admin
             </button>
 
             <div
                 id="admin-logged-info"
-                style="display: none;">
+                style="display:none;"
+            >
 
                 <span
-                    style="font-size: 13px; font-weight: bold;">
+                    style="
+                        font-size:13px;
+                        font-weight:bold;
+                    "
+                >
                     👤 Modo Administrador
                 </span>
 
                 <button
                     id="btn-logout"
-                    class="btn-logout">
+                    class="btn-logout"
+                >
                     Cerrar Sesión
                 </button>
 
             </div>
+
         </div>
+
     </header>
 
 
     <main class="container">
 
         <!-- =========================================
-             CAMBIO ENTRE MUNDOS
+             MUNDO BIO / QUÍMICO
         ========================================== -->
 
         <div class="world-switcher">
 
             <button
                 id="btn-world-bio"
-                class="btn-world active-bio">
+                class="btn-world active-bio"
+            >
                 🍃 MUNDO BIO
             </button>
 
             <button
                 id="btn-world-qui"
-                class="btn-world">
+                class="btn-world"
+            >
                 🧪 MUNDO QUÍMICO
             </button>
 
@@ -83,16 +100,26 @@
             <div class="stats-grid">
 
                 <div class="stat-card">
+
                     Total Registrados
-                    <span id="stat-total">0</span>
+
+                    <span id="stat-total">
+                        0
+                    </span>
+
                 </div>
+
 
                 <div
                     class="stat-card"
-                    id="stat-conditional-card">
+                    id="stat-conditional-card"
+                >
 
                     Eficacia Alta
-                    <span id="stat-alta">0</span>
+
+                    <span id="stat-alta">
+                        0
+                    </span>
 
                 </div>
 
@@ -117,38 +144,48 @@
                 placeholder="Buscar por plaga, nombre, o activo..."
             >
 
+
             <div
                 class="filter-tags"
-                id="tags-container">
+                id="tags-container"
+            >
 
                 <button
                     class="btn-filter"
                     data-funcion="todos"
-                    style="background:#81c784; font-weight:bold;">
+                    style="
+                        background:#81c784;
+                        font-weight:bold;
+                    "
+                >
                     Todos
                 </button>
 
                 <button
                     class="btn-filter"
-                    data-funcion="insecticida">
+                    data-funcion="insecticida"
+                >
                     Insecticidas
                 </button>
 
                 <button
                     class="btn-filter"
-                    data-funcion="fungicida">
+                    data-funcion="fungicida"
+                >
                     Fungicidas
                 </button>
 
                 <button
                     class="btn-filter"
-                    data-funcion="herbicida">
+                    data-funcion="herbicida"
+                >
                     Herbicidas
                 </button>
 
                 <button
                     class="btn-filter"
-                    data-funcion="estimulante">
+                    data-funcion="estimulante"
+                >
                     Estimulantes
                 </button>
 
@@ -197,9 +234,9 @@
                 >
 
 
-                <!-- ===================================
-                     ESCÁNER DE IA
-                ==================================== -->
+                <!-- =================================
+                     ESCÁNER IA
+                ================================== -->
 
                 <div
                     id="ai-scanner-box"
@@ -210,26 +247,31 @@
                         border-radius:8px;
                         margin-bottom:20px;
                         text-align:center;
-                    ">
+                    "
+                >
 
                     <h3
                         style="
                             margin-top:0;
                             color:#2e7d32;
-                        ">
+                        "
+                    >
                         📸 Escáner de Etiqueta con IA
                     </h3>
+
 
                     <p
                         style="
                             font-size:13px;
                             color:#424242;
                             margin-bottom:10px;
-                        ">
+                        "
+                    >
                         Sube o toma una foto de la
                         etiqueta o ficha del producto
-                        para auto-llenar los datos.
+                        para identificar sus datos.
                     </p>
+
 
                     <input
                         type="file"
@@ -239,6 +281,7 @@
                         style="display:none;"
                     >
 
+
                     <button
                         type="button"
                         id="btn-trigger-ai"
@@ -247,9 +290,11 @@
                             background:#2e7d32;
                             width:100%;
                             max-width:250px;
-                        ">
+                        "
+                    >
                         📷 Tomar / Cargar Foto
                     </button>
+
 
                     <div
                         id="ai-loading"
@@ -258,7 +303,8 @@
                             margin-top:10px;
                             font-weight:bold;
                             color:#1b5e20;
-                        ">
+                        "
+                    >
                         ⏳ Analizando etiqueta con IA...
                         Por favor espera unos segundos.
                     </div>
@@ -266,21 +312,24 @@
                 </div>
 
 
-                <!-- ===================================
+                <!-- =================================
                      TIPO DE REGISTRO
-                ==================================== -->
+                ================================== -->
 
                 <label
-                    for="form-tipo-registro">
+                    for="form-tipo-registro"
+                >
                     Tipo de Control:
                 </label>
+
 
                 <select
                     id="form-tipo-registro"
                     style="
                         background:#f5f5f5;
                         font-weight:bold;
-                    ">
+                    "
+                >
 
                     <option value="bio">
                         Ecológico / BIO 🍃
@@ -293,82 +342,102 @@
                 </select>
 
 
-                <!-- ===================================
+                <!-- =================================
                      NOMBRE
-                ==================================== -->
+                ================================== -->
 
                 <label
-                    for="recipe-name">
+                    for="recipe-name"
+                >
                     Nombre Comercial / Producto:
                 </label>
+
 
                 <input
                     type="text"
                     id="recipe-name"
                     required
-                    placeholder="Ej: Purín de Ortiga o Amistar Top"
+                    placeholder="Ej: Orthene 75 SP"
                 >
 
 
-                <!-- ===================================
-                     FUNCIÓN TÉCNICA
-                ==================================== -->
+                <!-- =================================
+                     FUNCIÓN
+                ================================== -->
 
                 <label>
                     Función Técnica
                     (Puedes marcar varias):
                 </label>
 
+
                 <div class="checkbox-group">
 
                     <label>
+
                         <input
                             type="checkbox"
                             name="funcion"
                             value="insecticida"
                         >
+
                         Insecticida
+
                     </label>
 
+
                     <label>
+
                         <input
                             type="checkbox"
                             name="funcion"
                             value="fungicida"
                         >
+
                         Fungicida
+
                     </label>
 
+
                     <label>
+
                         <input
                             type="checkbox"
                             name="funcion"
                             value="herbicida"
                         >
+
                         Herbicida
+
                     </label>
 
+
                     <label>
+
                         <input
                             type="checkbox"
                             name="funcion"
                             value="estimulante"
                         >
+
                         Estimulante Radicular
+
                     </label>
 
                 </div>
 
 
-                <!-- ===================================
+                <!-- =================================
                      PLAGAS
-                ==================================== -->
+                ================================== -->
 
                 <label
-                    for="recipe-plagas">
+                    for="recipe-plagas"
+                >
                     Plagas o Enfermedades Objetivo
                     (separados por comas):
                 </label>
+
 
                 <input
                     type="text"
@@ -377,10 +446,9 @@
                 >
 
 
-                <!-- ===================================
+                <!-- =================================
                      DOSIFICACIÓN
-                     NUEVO SISTEMA
-                ==================================== -->
+                ================================== -->
 
                 <div
                     id="dosificacion-section"
@@ -390,31 +458,35 @@
                         border:1px solid #c8e6c9;
                         border-radius:8px;
                         background:#fafafa;
-                    ">
+                    "
+                >
 
                     <h3
                         style="
                             margin-top:0;
                             margin-bottom:5px;
                             color:#2e7d32;
-                        ">
+                        "
+                    >
                         💧 Dosificación
                     </h3>
+
 
                     <p
                         style="
                             margin-top:0;
                             font-size:13px;
                             color:#555;
-                        ">
-                        Ingresa las dosis tomando
+                        "
+                    >
+                        Las dosis se ingresan tomando
                         <strong>100 L de agua</strong>
                         como referencia.
                     </p>
 
 
                     <!-- =================================
-                         INGRESO BASE 100 L
+                         AGUA / DOSIS
                     ================================== -->
 
                     <div
@@ -424,21 +496,22 @@
                                 1fr 1fr 1fr;
                             gap:10px;
                             align-items:end;
-                        ">
+                        "
+                    >
 
                         <div>
 
                             <label
-                                for="recipe-dose-water">
+                                for="recipe-dose-water"
+                            >
                                 Agua:
                             </label>
+
 
                             <input
                                 type="number"
                                 id="recipe-dose-water"
                                 value="100"
-                                min="100"
-                                step="1"
                                 readonly
                                 style="
                                     background:#eeeeee;
@@ -452,12 +525,14 @@
                         <div>
 
                             <label
-                                for="recipe-dose-low">
+                                for="recipe-dose-low"
+                            >
                                 Dosis Baja
                                 <small>
                                     (Preventivo)
                                 </small>
                             </label>
+
 
                             <input
                                 type="number"
@@ -473,12 +548,14 @@
                         <div>
 
                             <label
-                                for="recipe-dose-high">
+                                for="recipe-dose-high"
+                            >
                                 Dosis Alta
                                 <small>
                                     (Curativo)
                                 </small>
                             </label>
+
 
                             <input
                                 type="number"
@@ -500,11 +577,13 @@
                     <div
                         style="
                             margin-top:12px;
-                        ">
+                        "
+                    >
 
                         <label>
                             Unidad de medida:
                         </label>
+
 
                         <div
                             class="checkbox-group"
@@ -512,33 +591,45 @@
                                 display:flex;
                                 gap:15px;
                                 flex-wrap:wrap;
-                            ">
+                            "
+                        >
 
                             <label>
+
                                 <input
                                     type="radio"
                                     name="dose-unit"
                                     value="g"
                                 >
+
                                 g
+
                             </label>
 
+
                             <label>
+
                                 <input
                                     type="radio"
                                     name="dose-unit"
                                     value="cc"
                                 >
+
                                 cc
+
                             </label>
 
+
                             <label>
+
                                 <input
                                     type="radio"
                                     name="dose-unit"
                                     value="mL"
                                 >
+
                                 mL
+
                             </label>
 
                         </div>
@@ -547,7 +638,7 @@
 
 
                     <!-- =================================
-                         MENSAJE DE VALIDACIÓN
+                         AVISO
                     ================================== -->
 
                     <div
@@ -560,13 +651,20 @@
                             background:#fff3cd;
                             color:#856404;
                             font-size:13px;
-                        ">
+                        "
+                    >
                     </div>
 
 
                     <!-- =================================
-                         TABLA DE EQUIVALENCIAS
-                         OCULTA AL INICIO
+                         TABLA
+                         
+                         SOLO SE MUESTRA CUANDO:
+                         - DOSIS BAJA
+                         - DOSIS ALTA
+                         - UNIDAD
+                         
+                         ESTÁN COMPLETAS
                     ================================== -->
 
                     <div
@@ -574,20 +672,24 @@
                         style="
                             display:none;
                             margin-top:18px;
-                        ">
+                        "
+                    >
 
                         <h4
                             style="
                                 margin-bottom:10px;
-                            ">
+                            "
+                        >
                             Tabla de equivalencias
                         </h4>
+
 
                         <div
                             class="tabla-dosis-container"
                             style="
                                 overflow-x:auto;
-                            ">
+                            "
+                        >
 
                             <table
                                 class="tabla-dosis"
@@ -595,7 +697,8 @@
                                 style="
                                     width:100%;
                                     border-collapse:collapse;
-                                ">
+                                "
+                            >
 
                                 <thead>
 
@@ -619,10 +722,12 @@
 
                                 </thead>
 
+
                                 <tbody>
 
                                     <tr
-                                        data-litros="1">
+                                        data-litros="1"
+                                    >
 
                                         <td>
                                             <strong>
@@ -631,12 +736,14 @@
                                         </td>
 
                                         <td
-                                            id="dose-low-1">
+                                            id="dose-low-1"
+                                        >
                                             —
                                         </td>
 
                                         <td
-                                            id="dose-high-1">
+                                            id="dose-high-1"
+                                        >
                                             —
                                         </td>
 
@@ -644,7 +751,8 @@
 
 
                                     <tr
-                                        data-litros="15">
+                                        data-litros="15"
+                                    >
 
                                         <td>
                                             <strong>
@@ -653,12 +761,14 @@
                                         </td>
 
                                         <td
-                                            id="dose-low-15">
+                                            id="dose-low-15"
+                                        >
                                             —
                                         </td>
 
                                         <td
-                                            id="dose-high-15">
+                                            id="dose-high-15"
+                                        >
                                             —
                                         </td>
 
@@ -666,7 +776,8 @@
 
 
                                     <tr
-                                        data-litros="100">
+                                        data-litros="100"
+                                    >
 
                                         <td>
                                             <strong>
@@ -675,12 +786,14 @@
                                         </td>
 
                                         <td
-                                            id="dose-low-100">
+                                            id="dose-low-100"
+                                        >
                                             —
                                         </td>
 
                                         <td
-                                            id="dose-high-100">
+                                            id="dose-high-100"
+                                        >
                                             —
                                         </td>
 
@@ -688,7 +801,8 @@
 
 
                                     <tr
-                                        data-litros="160">
+                                        data-litros="160"
+                                    >
 
                                         <td>
                                             <strong>
@@ -697,12 +811,14 @@
                                         </td>
 
                                         <td
-                                            id="dose-low-160">
+                                            id="dose-low-160"
+                                        >
                                             —
                                         </td>
 
                                         <td
-                                            id="dose-high-160">
+                                            id="dose-high-160"
+                                        >
                                             —
                                         </td>
 
@@ -727,8 +843,8 @@
                                 background:#e8f5e9;
                                 border-radius:6px;
                                 font-size:13px;
-                            ">
-
+                            "
+                        >
                         </div>
 
 
@@ -744,7 +860,8 @@
                                 border:1px solid #81c784;
                                 border-radius:6px;
                                 background:#f1f8e9;
-                            ">
+                            "
+                        >
 
                             <strong>
                                 ¿Confirmas que las
@@ -752,13 +869,15 @@
                                 son las correctas?
                             </strong>
 
+
                             <div
                                 style="
                                     display:flex;
                                     gap:10px;
                                     margin-top:10px;
                                     flex-wrap:wrap;
-                                ">
+                                "
+                            >
 
                                 <button
                                     type="button"
@@ -766,18 +885,22 @@
                                     class="btn-submit"
                                     style="
                                         background:#2e7d32;
-                                    ">
+                                    "
+                                >
                                     ✅ Sí, confirmar
                                 </button>
+
 
                                 <button
                                     type="button"
                                     id="btn-cancel-doses"
-                                    class="btn-cancel">
+                                    class="btn-cancel"
+                                >
                                     ✖ Corregir
                                 </button>
 
                             </div>
+
 
                             <div
                                 id="dose-confirm-status"
@@ -787,7 +910,8 @@
                                     font-size:13px;
                                     font-weight:bold;
                                     color:#2e7d32;
-                                ">
+                                "
+                            >
                                 ✅ Dosificaciones confirmadas.
                             </div>
 
@@ -798,47 +922,56 @@
                 </div>
 
 
-                <!-- ===================================
-                     COMPATIBILIDAD DEL FORMULARIO
-                     CON APP.JS
+                <!-- =================================
+                     COMPATIBILIDAD
                      
-                     Este textarea ya no se muestra,
-                     pero conserva el ID esperado
-                     por app.js y por registros antiguos.
-                ==================================== -->
+                     Se conserva para registros
+                     antiguos y para app.js.
+                     El usuario NO lo ve.
+                ================================== -->
 
                 <textarea
                     id="recipe-app"
                     style="display:none;"
-                    aria-hidden="true">
-                </textarea>
+                    aria-hidden="true"
+                ></textarea>
 
 
-                <!-- ===================================
+                <!-- =================================
                      MUNDO BIO
-                ==================================== -->
+                ================================== -->
 
                 <div
                     id="section-form-bio"
-                    class="dynamic-section">
+                    class="dynamic-section"
+                >
 
                     <label
-                        for="recipe-efectividad">
+                        for="recipe-efectividad"
+                    >
                         Evaluación de Efectividad:
                     </label>
 
-                    <select
-                        id="recipe-efectividad">
 
-                        <option value="En fase de evaluación">
+                    <select
+                        id="recipe-efectividad"
+                    >
+
+                        <option
+                            value="En fase de evaluación"
+                        >
                             En fase de evaluación
                         </option>
 
-                        <option value="Eficacia Moderada">
+                        <option
+                            value="Eficacia Moderada"
+                        >
                             Eficacia Moderada
                         </option>
 
-                        <option value="Eficacia Alta">
+                        <option
+                            value="Eficacia Alta"
+                        >
                             Eficacia Alta
                         </option>
 
@@ -846,10 +979,12 @@
 
 
                     <label
-                        for="recipe-contra">
+                        for="recipe-contra"
+                    >
                         ⚠️ Contraindicaciones /
                         Advertencias:
                     </label>
+
 
                     <input
                         type="text"
@@ -859,35 +994,39 @@
 
 
                     <label
-                        for="recipe-ingredients">
+                        for="recipe-ingredients"
+                    >
                         Ingredientes y Cantidades:
                     </label>
+
 
                     <textarea
                         id="recipe-ingredients"
                         rows="2"
-                        placeholder="Ej: 1kg Ortiga fresca, 10L Agua">
-                    </textarea>
+                        placeholder="Ej: 1kg Ortiga fresca, 10L Agua"
+                    ></textarea>
 
 
                     <label
-                        for="recipe-prep">
+                        for="recipe-prep"
+                    >
                         Instrucciones de Preparación
                         (Paso a Paso):
                     </label>
 
+
                     <textarea
                         id="recipe-prep"
                         rows="2"
-                        placeholder="Pasos para fermentar o mezclar...">
-                    </textarea>
+                        placeholder="Pasos para fermentar o mezclar..."
+                    ></textarea>
 
                 </div>
 
 
-                <!-- ===================================
+                <!-- =================================
                      MUNDO QUÍMICO
-                ==================================== -->
+                ================================== -->
 
                 <div
                     id="section-form-quimico"
@@ -895,22 +1034,42 @@
                     style="
                         display:none;
                         border-color:#37474f;
-                    ">
-
+                    "
+                >
 
                     <!-- ===============================
                          INGREDIENTE ACTIVO
                     ================================= -->
 
                     <label
-                        for="recipe-activo">
+                        for="recipe-activo"
+                    >
                         Ingrediente Activo:
                     </label>
+
 
                     <input
                         type="text"
                         id="recipe-activo"
                         placeholder="Ej: Acefato 750 g/kg"
+                    >
+
+
+                    <!-- ===============================
+                         CONCENTRACIÓN
+                    ================================= -->
+
+                    <label
+                        for="recipe-concentracion"
+                    >
+                        Concentración:
+                    </label>
+
+
+                    <input
+                        type="text"
+                        id="recipe-concentracion"
+                        placeholder="Ej: 750 g/kg o 75%"
                     >
 
 
@@ -923,62 +1082,78 @@
                         (Selecciona los que correspondan):
                     </label>
 
+
                     <div class="checkbox-group">
 
                         <label>
+
                             <input
                                 type="checkbox"
                                 name="modo_accion"
                                 value="contacto"
                             >
+
                             Contacto
+
                         </label>
 
+
                         <label>
+
                             <input
                                 type="checkbox"
                                 name="modo_accion"
                                 value="sistemico"
                             >
+
                             Sistémico
+
                         </label>
 
+
                         <label>
+
                             <input
                                 type="checkbox"
                                 name="modo_accion"
                                 value="digestivo"
                             >
+
                             Digestivo / Ingestión
+
                         </label>
 
                     </div>
 
 
                     <!-- ===============================
-                         CARENCIA
+                         CARENCIA MANUAL
                     ================================= -->
 
                     <label
-                        for="recipe-carencia">
+                        for="recipe-carencia"
+                    >
                         ⏳ Días de Carencia:
                     </label>
+
 
                     <input
                         type="text"
                         id="recipe-carencia"
-                        placeholder="Ej: 7 días antes de la cosecha"
+                        placeholder="Ej: 7 días"
                     >
 
 
                     <!-- ===============================
-                         REINGRESO
+                         REINGRESO MANUAL
                     ================================= -->
 
                     <label
-                        for="recipe-reentrada">
+                        for="recipe-reentrada"
+                    >
                         🚪 Horas de Reentrada Segura:
                     </label>
+
 
                     <input
                         type="text"
@@ -989,17 +1164,16 @@
                 </div>
 
 
-                <!-- ===================================
+                <!-- =================================
                      BOTONES
-                ==================================== -->
+                ================================== -->
 
                 <button
                     type="submit"
                     class="btn-submit"
-                    id="btn-form-submit">
-
+                    id="btn-form-submit"
+                >
                     Guardar Producto
-
                 </button>
 
 
@@ -1007,10 +1181,9 @@
                     type="button"
                     class="btn-cancel"
                     id="btn-form-cancel"
-                    style="display:none;">
-
+                    style="display:none;"
+                >
                     Cancelar Edición
-
                 </button>
 
             </form>
@@ -1021,19 +1194,21 @@
 
 
     <!-- =========================================
-         MODAL LOGIN ADMIN
+         MODAL LOGIN
     ========================================== -->
 
     <div
         id="login-modal"
         class="modal-overlay"
-        style="display:none;">
+        style="display:none;"
+    >
 
         <div class="modal-content">
 
             <h3>
                 🔒 Acceso Administrador
             </h3>
+
 
             <p>
                 Ingresa tus credenciales para
@@ -1044,9 +1219,11 @@
             <form id="login-form">
 
                 <label
-                    for="login-email">
+                    for="login-email"
+                >
                     Correo:
                 </label>
+
 
                 <input
                     type="email"
@@ -1057,9 +1234,11 @@
 
 
                 <label
-                    for="login-password">
+                    for="login-password"
+                >
                     Contraseña:
                 </label>
+
 
                 <input
                     type="password"
@@ -1073,14 +1252,17 @@
 
                     <button
                         type="submit"
-                        class="btn-submit">
+                        class="btn-submit"
+                    >
                         Ingresar
                     </button>
+
 
                     <button
                         type="button"
                         id="btn-close-login"
-                        class="btn-cancel">
+                        class="btn-cancel"
+                    >
                         Cancelar
                     </button>
 
@@ -1094,13 +1276,13 @@
 
 
     <!-- =========================================
-         APP
+         APP.JS
     ========================================== -->
 
     <script
         type="module"
-        src="./app.js">
-    </script>
+        src="./app.js"
+    ></script>
 
 </body>
 </html>
