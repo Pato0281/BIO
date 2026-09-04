@@ -1,345 +1,832 @@
 //======================================================
-// BÍO IA ENGINE V3
+// BÍO IA ENGINE V4
 // ia.js
-// Parte 1
+//======================================================
+//
+// FLUJO ACTUAL:
+//
+// FOTO
+//   ↓
+// Netlify Function
+//   ↓
+// OpenRouter / IA
+//   ↓
+// Identificación
+//   ↓
+// app.js
+//
+// DATOS QUE RECIBE:
+//
+// ✅ Nombre
+// ✅ Ingrediente activo
+// ✅ Concentración
+// ✅ Modo de acción
+// ✅ Función
+//
+// DATOS MANUALES EN LA APP:
+//
+// ✅ Plaga 1
+// ✅ Plaga 2
+// ✅ Plaga 3
+// ✅ Plaga 4
+// ✅ Dosis baja
+// ✅ Dosis alta
+// ✅ Unidad
+// ✅ Carencia
+// ✅ Reingreso
+//
 //======================================================
 
-import { IA_CONFIG } from "./config.js";
-import { PROMPT, PROMPT_VERSION } from "./prompt.js";
-import { crearProductoVacio } from "./model.js";
 
 //------------------------------------------------------
-// URL de tu Cloud Function
-// (se reemplazará cuando la creemos)
+// CONFIGURACIÓN
 //------------------------------------------------------
 
-const FUNCTION_URL = IA_CONFIG.API_URL;
+import {
+    IA_CONFIG
+} from "./config.js";
+
 
 //------------------------------------------------------
-// Función principal
+// URL DE LA NETLIFY FUNCTION
 //------------------------------------------------------
 
-export async function analizarEtiqueta(file) {
+const FUNCTION_URL =
+    IA_CONFIG.API_URL;
 
-    if (!file) {
-        return error("No se recibió ninguna imagen.");
+
+//------------------------------------------------------
+// FUNCIÓN PRINCIPAL
+//------------------------------------------------------
+
+export async function analizarEtiqueta(
+    file
+) {
+
+    if (
+        !file
+    ) {
+
+        return error(
+            "No se recibió ninguna imagen."
+        );
+
     }
 
-    if (!file.type.startsWith("image/")) {
-        return error("El archivo seleccionado no es una imagen.");
+
+    if (
+        !file.type.startsWith(
+            "image/"
+        )
+    ) {
+
+        return error(
+            "El archivo seleccionado no es una imagen."
+        );
+
     }
+
 
     try {
 
-        const base64 = await convertirImagen(file);
+        //--------------------------------------------------
+        // CONVERTIR IMAGEN
+        //--------------------------------------------------
 
-        const respuesta = await enviarACloudFunction(base64);
+        const base64 =
+            await convertirImagen(
+                file
+            );
 
-        return normalizarRespuesta(respuesta);
 
-    } catch (e) {
+        //--------------------------------------------------
+        // ENVIAR A NETLIFY
+        //--------------------------------------------------
 
-        console.error(e);
+        const respuesta =
+            await enviarACloudFunction(
+                base64
+            );
 
-        return error(e.message);
+
+        //--------------------------------------------------
+        // NORMALIZAR
+        //--------------------------------------------------
+
+        return normalizarRespuesta(
+            respuesta
+        );
+
+
+    } catch (
+        e
+    ) {
+
+        console.error(
+            "Error en analizarEtiqueta():",
+            e
+        );
+
+
+        return error(
+            e?.message ||
+            "Error desconocido al analizar la imagen."
+        );
 
     }
 
 }
 
+
 //------------------------------------------------------
-// Conversión Base64
+// CONVERTIR IMAGEN
 //------------------------------------------------------
 
-async function convertirImagen(file){
+async function convertirImagen(
+    file
+) {
 
-    return new Promise((resolve,reject)=>{
+    return new Promise(
+        (
+            resolve,
+            reject
+        ) => {
 
-        const reader=new FileReader();
+            const reader =
+                new FileReader();
 
-        reader.readAsDataURL(file);
 
-        reader.onload=(event)=>{
+            reader.onload = (
+                event
+            ) => {
 
-            const img=new Image();
+                const img =
+                    new Image();
 
-            img.src=event.target.result;
 
-            img.onload=()=>{
+                img.onload = () => {
 
-                const canvas=document.createElement("canvas");
+                    const MAX_WIDTH =
+                        1024;
 
-                const MAX_WIDTH=1024;
-                const MAX_HEIGHT=1024;
+                    const MAX_HEIGHT =
+                        1024;
 
-                let width=img.width;
-                let height=img.height;
 
-                if(width>height){
+                    let width =
+                        img.width;
 
-                    if(width>MAX_WIDTH){
+                    let height =
+                        img.height;
 
-                        height*=MAX_WIDTH/width;
-                        width=MAX_WIDTH;
+
+                    //--------------------------------------------------
+                    // REDIMENSIONAR
+                    //--------------------------------------------------
+
+                    if (
+                        width >
+                        MAX_WIDTH ||
+                        height >
+                        MAX_HEIGHT
+                    ) {
+
+                        const factor =
+                            Math.min(
+                                MAX_WIDTH /
+                                    width,
+
+                                MAX_HEIGHT /
+                                    height
+                            );
+
+
+                        width =
+                            Math.round(
+                                width *
+                                factor
+                            );
+
+
+                        height =
+                            Math.round(
+                                height *
+                                factor
+                            );
 
                     }
 
-                }else{
 
-                    if(height>MAX_HEIGHT){
+                    const canvas =
+                        document.createElement(
+                            "canvas"
+                        );
 
-                        width*=MAX_HEIGHT/height;
-                        height=MAX_HEIGHT;
+
+                    canvas.width =
+                        width;
+
+                    canvas.height =
+                        height;
+
+
+                    const ctx =
+                        canvas.getContext(
+                            "2d"
+                        );
+
+
+                    if (
+                        !ctx
+                    ) {
+
+                        reject(
+                            new Error(
+                                "No se pudo crear el contexto de imagen."
+                            )
+                        );
+
+                        return;
 
                     }
 
-                }
 
-                canvas.width=width;
-                canvas.height=height;
+                    ctx.drawImage(
+                        img,
+                        0,
+                        0,
+                        width,
+                        height
+                    );
 
-                const ctx=canvas.getContext("2d");
 
-                ctx.drawImage(img,0,0,width,height);
+                    //--------------------------------------------------
+                    // JPEG
+                    //--------------------------------------------------
 
-                const dataUrl=canvas.toDataURL(
-                    "image/jpeg",
-                    0.70
-                );
+                    const dataUrl =
+                        canvas.toDataURL(
+                            "image/jpeg",
+                            0.70
+                        );
 
-                resolve(
-                    dataUrl.split(",")[1]
+
+                    const partes =
+                        dataUrl.split(
+                            ","
+                        );
+
+
+                    if (
+                        partes.length <
+                        2
+                    ) {
+
+                        reject(
+                            new Error(
+                                "No se pudo convertir la imagen."
+                            )
+                        );
+
+                        return;
+
+                    }
+
+
+                    resolve(
+                        partes[1]
+                    );
+
+                };
+
+
+                img.onerror = () => {
+
+                    reject(
+                        new Error(
+                            "No se pudo cargar la imagen."
+                        )
+                    );
+
+                };
+
+
+                img.src =
+                    event.target.result;
+
+            };
+
+
+            reader.onerror = () => {
+
+                reject(
+                    new Error(
+                        "No se pudo leer el archivo de imagen."
+                    )
                 );
 
             };
 
-            img.onerror=reject;
 
-        };
+            reader.readAsDataURL(
+                file
+            );
 
-        reader.onerror=reject;
-
-    });
+        }
+    );
 
 }
 
+
 //------------------------------------------------------
-// Enviar a Firebase Function
+// ENVIAR A NETLIFY FUNCTION
 //------------------------------------------------------
 
-async function enviarACloudFunction(base64){
+async function enviarACloudFunction(
+    base64
+) {
 
-    const response=await fetch(
+    const response =
+        await fetch(
+            FUNCTION_URL,
+            {
 
-        FUNCTION_URL,
+                method:
+                    "POST",
 
-        {
+                headers:
+                {
 
-            method:"POST",
+                    "Content-Type":
+                        "application/json"
 
-            headers:{
-                "Content-Type":"application/json"
-            },
+                },
 
-            body:JSON.stringify({
+                body:
+                    JSON.stringify(
+                        {
 
-                version:IA_CONFIG.ENGINE_VERSION,
+                            version:
+                                IA_CONFIG.ENGINE_VERSION,
 
-                promptVersion:PROMPT_VERSION,
+                            image:
+                                base64
 
-                prompt:PROMPT,
+                        }
+                    )
 
-                image:base64
+            }
+        );
 
-            })
+
+    //--------------------------------------------------
+    // ERROR HTTP
+    //--------------------------------------------------
+
+    if (
+        !response.ok
+    ) {
+
+        let detalle =
+            "";
+
+
+        try {
+
+            detalle =
+                await response.text();
+
+        } catch (
+            e
+        ) {
+
+            detalle =
+                "Sin información adicional.";
 
         }
 
-    );
 
-   if (!response.ok) {
+        console.error(
+            "ERROR HTTP DEL SERVIDOR IA:",
+            {
 
-    let detalle = "";
+                status:
+                    response.status,
+
+                statusText:
+                    response.statusText,
+
+                detalle:
+                    detalle
+
+            }
+        );
+
+
+        throw new Error(
+            `Servidor IA respondió ${response.status} ${response.statusText}. ${detalle}`
+        );
+
+    }
+
+
+    //--------------------------------------------------
+    // JSON
+    //--------------------------------------------------
 
     try {
-        detalle = await response.text();
-    } catch (e) {
-        detalle = "Sin información adicional.";
+
+        return await response.json();
+
+    } catch (
+        e
+    ) {
+
+        throw new Error(
+            "El servidor IA respondió pero no devolvió JSON válido."
+        );
+
     }
-
-    console.error("ERROR HTTP DEL SERVIDOR IA:", {
-        status: response.status,
-        statusText: response.statusText,
-        detalle: detalle
-    });
-
-    throw new Error(
-        `Servidor IA respondió ${response.status} ${response.statusText}. ${detalle}`
-    );
-}
-    return await response.json();
 
 }
+
+
 //------------------------------------------------------
-// Normalizar Respuesta
+// NORMALIZAR RESPUESTA
 //------------------------------------------------------
 
-function normalizarRespuesta(json) {
+function normalizarRespuesta(
+    json
+) {
 
-    const producto = crearProductoVacio();
+    const producto =
+        crearProductoVacio();
 
-    if (!json) {
-        return error("La IA no devolvió información.");
-    }
 
-    producto.ok = true;
+    if (
+        !json
+    ) {
 
-    producto.proveedor = json.proveedor || IA_CONFIG.PROVIDER;
-
-    producto.modelo = json.modelo || "";
-
-    producto.confianza = json.confianza || 90;
-
-    if (json.datos) {
-
-        producto.datos.nombre =
-            json.datos.nombre || "";
-
-        producto.datos.fabricante =
-            json.datos.fabricante || "";
-
-        producto.datos.registro =
-            json.datos.registro || "";
-
-        producto.datos.formulacion =
-            json.datos.formulacion || "";
-
-        producto.datos.concentracion =
-            json.datos.concentracion || "";
-
-        producto.datos.tipo_registro =
-            json.datos.tipo_registro || "quimico";
-
-        producto.datos.ingrediente_activo =
-            json.datos.ingrediente_activo || "";
-
-        producto.datos.grupo_quimico =
-            json.datos.grupo_quimico || "";
-
-        producto.datos.funcion =
-            limpiarArray(json.datos.funcion);
-
-        producto.datos.modo_accion =
-            limpiarArray(json.datos.modo_accion);
-
-        producto.datos.plagas_objetivo =
-            limpiarArray(json.datos.plagas_objetivo);
-
-        producto.datos.dosis =
-            json.datos.dosis || "";
-
-        producto.datos.carencia =
-            json.datos.carencia || "";
-
-        producto.datos.reentrada =
-            json.datos.reentrada || "";
-
-        producto.datos.observaciones =
-            json.datos.observaciones || "";
+        return error(
+            "La IA no devolvió información."
+        );
 
     }
 
-    else {
 
-        producto.datos.nombre =
-            json.nombre || "";
+    //--------------------------------------------------
+    // ESTADO
+    //--------------------------------------------------
 
-        producto.datos.fabricante =
-            json.fabricante || "";
+    producto.ok =
+        json.ok !== false;
 
-        producto.datos.registro =
-            json.registro || "";
 
-        producto.datos.formulacion =
-            json.formulacion || "";
+    producto.proveedor =
+        json.proveedor ||
+        IA_CONFIG.PROVIDER ||
+        "OpenRouter";
 
-        producto.datos.concentracion =
-            json.concentracion || "";
 
-        producto.datos.tipo_registro =
-            json.tipo_registro || "quimico";
+    producto.modelo =
+        json.modelo ||
+        "";
 
-        producto.datos.ingrediente_activo =
-            json.ingrediente_activo || "";
 
-        producto.datos.grupo_quimico =
-            json.grupo_quimico || "";
+    producto.confianza =
+        Number(
+            json.confianza ||
+            90
+        );
 
-        producto.datos.funcion =
-            limpiarArray(json.funcion);
 
-        producto.datos.modo_accion =
-            limpiarArray(json.modo_accion);
+    producto.mensaje =
+        json.mensaje ||
+        "";
 
-        producto.datos.plagas_objetivo =
-            limpiarArray(json.plagas_objetivo);
 
-        producto.datos.dosis =
-            json.dosis || "";
+    //--------------------------------------------------
+    // DATOS
+    //--------------------------------------------------
 
-        producto.datos.carencia =
-            json.carencia || "";
+    const datos =
+        json.datos &&
+        typeof json.datos ===
+            "object"
 
-        producto.datos.reentrada =
-            json.reentrada || "";
+            ? json.datos
 
-        producto.datos.observaciones =
-            json.observaciones || "";
+            : json;
 
-    }
+
+    //--------------------------------------------------
+    // TIPO
+    //--------------------------------------------------
+
+    producto.datos.tipo_registro =
+        datos.tipo_registro ||
+        "quimico";
+
+
+    //--------------------------------------------------
+    // NOMBRE
+    //--------------------------------------------------
+
+    producto.datos.nombre =
+        normalizarTexto(
+            datos.nombre
+        );
+
+
+    //--------------------------------------------------
+    // INGREDIENTE ACTIVO
+    //--------------------------------------------------
+
+    producto.datos.ingrediente_activo =
+        normalizarTexto(
+            datos.ingrediente_activo
+        );
+
+
+    //--------------------------------------------------
+    // CONCENTRACIÓN
+    //--------------------------------------------------
+
+    producto.datos.concentracion =
+        normalizarTexto(
+            datos.concentracion
+        );
+
+
+    //--------------------------------------------------
+    // FUNCIÓN
+    //--------------------------------------------------
+
+    producto.datos.funcion =
+        limpiarArray(
+            datos.funcion
+        );
+
+
+    //--------------------------------------------------
+    // MODO DE ACCIÓN
+    //--------------------------------------------------
+
+    producto.datos.modo_accion =
+        limpiarArray(
+            datos.modo_accion
+        );
+
+
+    //--------------------------------------------------
+    // IMPORTANTE
+    //
+    // Estos campos YA NO son proporcionados
+    // por la IA.
+    //
+    //--------------------------------------------------
+
+    producto.datos.plagas_objetivo =
+        [];
+
+    producto.datos.dosis =
+        "";
+
+    producto.datos.carencia =
+        "";
+
+    producto.datos.reentrada =
+        "";
+
 
     return producto;
 
 }
 
+
 //------------------------------------------------------
-// Limpiar Arrays
+// NORMALIZAR TEXTO
 //------------------------------------------------------
 
-function limpiarArray(valor){
+function normalizarTexto(
+    valor
+) {
 
-    if(!valor)
-        return [];
+    if (
+        typeof valor !==
+            "string"
+    ) {
 
-    if(Array.isArray(valor))
-        return valor;
+        return "";
 
-    return String(valor)
-        .split(",")
-        .map(v=>v.trim())
-        .filter(v=>v!="");
+    }
+
+
+    const texto =
+        valor.trim();
+
+
+    if (
+        !texto
+    ) {
+
+        return "";
+
+    }
+
+
+    if (
+        texto.toLowerCase() ===
+        "no encontrado"
+    ) {
+
+        return "";
+
+    }
+
+
+    return texto;
 
 }
 
+
 //------------------------------------------------------
-// Error estándar
+// LIMPIAR ARRAYS
 //------------------------------------------------------
 
-function error(mensaje){
+function limpiarArray(
+    valor
+) {
 
-    return{
+    if (
+        !valor
+    ) {
 
-        ok:false,
+        return [];
 
-        proveedor:IA_CONFIG.PROVIDER,
+    }
 
-        modelo:"",
 
-        confianza:0,
+    if (
+        Array.isArray(
+            valor
+        )
+    ) {
 
-        mensaje,
+        return valor
+            .map(
+                item =>
+                    String(
+                        item
+                    ).trim()
+            )
+            .filter(
+                Boolean
+            );
 
-        datos:crearProductoVacio().datos
+    }
+
+
+    return String(
+        valor
+    )
+        .split(
+            ","
+        )
+        .map(
+            item =>
+                item.trim()
+        )
+        .filter(
+            Boolean
+        );
+
+}
+
+
+//------------------------------------------------------
+// CREAR PRODUCTO VACÍO
+//------------------------------------------------------
+
+function crearProductoVacio() {
+
+    return {
+
+        ok:
+            false,
+
+        proveedor:
+            IA_CONFIG.PROVIDER ||
+            "OpenRouter",
+
+        modelo:
+            "",
+
+        confianza:
+            0,
+
+        mensaje:
+            "",
+
+        datos:
+        {
+
+            tipo_registro:
+                "quimico",
+
+            nombre:
+                "",
+
+            fabricante:
+                "",
+
+            registro:
+                "",
+
+            formulacion:
+                "",
+
+            concentracion:
+                "",
+
+            ingrediente_activo:
+                "",
+
+            grupo_quimico:
+                "",
+
+            funcion:
+                [],
+
+            modo_accion:
+                [],
+
+            plagas_objetivo:
+                [],
+
+            enfermedades:
+                [],
+
+            malezas:
+                [],
+
+            cultivos:
+                [],
+
+            dosis:
+                "",
+
+            unidad_dosis:
+                "",
+
+            carencia:
+                "",
+
+            reentrada:
+                "",
+
+            compatibilidad:
+                "",
+
+            observaciones:
+                ""
+
+        }
+
+    };
+
+}
+
+
+//------------------------------------------------------
+// ERROR ESTÁNDAR
+//------------------------------------------------------
+
+function error(
+    mensaje
+) {
+
+    return {
+
+        ok:
+            false,
+
+        proveedor:
+            IA_CONFIG.PROVIDER ||
+            "OpenRouter",
+
+        modelo:
+            "",
+
+        confianza:
+            0,
+
+        mensaje:
+            mensaje,
+
+        datos:
+            crearProductoVacio()
+                .datos
 
     };
 
