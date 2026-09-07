@@ -482,247 +482,141 @@ onAuthStateChanged(
 // LOGIN ADMINISTRADOR
 // ======================================================
 
-function inicializarLoginAdministrador() {
+if (
+    btnOpenLogin &&
+    loginModal
+) {
 
-    const botonLogin =
-        document.getElementById(
-            "btn-open-login"
-        );
+    btnOpenLogin.addEventListener(
+        "click",
+        function (event) {
 
-    const modalLogin =
-        document.getElementById(
-            "login-modal"
-        );
+            event.preventDefault();
 
-    const botonCerrar =
-        document.getElementById(
-            "btn-close-login"
-        );
+            console.log(
+                "Acceso administrador: abrir ventana"
+            );
 
-    const formularioLogin =
-        document.getElementById(
-            "login-form"
-        );
+            loginModal.style.display =
+                "flex";
 
-
-    console.log(
-        "Inicializando acceso administrador..."
+        }
     );
 
+}
 
-    console.log(
-        "btn-open-login:",
-        botonLogin
+
+if (
+    btnCloseLogin &&
+    loginModal
+) {
+
+    btnCloseLogin.addEventListener(
+        "click",
+        function (event) {
+
+            event.preventDefault();
+
+            loginModal.style.display =
+                "none";
+
+        }
     );
 
-    console.log(
-        "login-modal:",
-        modalLogin
-    );
+}
 
 
-    // ------------------------------------------
-    // BOTÓN ABRIR
-    // ------------------------------------------
+if (
+    loginForm
+) {
 
-    if (
-        botonLogin &&
-        modalLogin
-    ) {
+    loginForm.addEventListener(
+        "submit",
+        async function (event) {
 
-        botonLogin.onclick =
-            function (event) {
+            event.preventDefault();
 
-                event.preventDefault();
+
+            const email =
+                document.getElementById(
+                    "login-email"
+                )?.value
+                ?.trim();
+
+
+            const password =
+                document.getElementById(
+                    "login-password"
+                )?.value;
+
+
+            if (
+                !email ||
+                !password
+            ) {
+
+                alert(
+                    "Ingresa correo y contraseña."
+                );
+
+                return;
+
+            }
+
+
+            try {
 
                 console.log(
-                    "ACCIONES: botón administrador presionado"
+                    "Intentando iniciar sesión en Firebase..."
                 );
 
 
-                modalLogin.style.display =
-                    "flex";
-
-                modalLogin.style.visibility =
-                    "visible";
-
-                modalLogin.style.opacity =
-                    "1";
+                await signInWithEmailAndPassword(
+                    auth,
+                    email,
+                    password
+                );
 
 
-                const campoEmail =
-                    document.getElementById(
-                        "login-email"
-                    );
+                console.log(
+                    "Login administrador correcto."
+                );
 
 
-                if (
-                    campoEmail
-                ) {
-
-                    setTimeout(
-                        () => {
-                            campoEmail.focus();
-                        },
-                        100
-                    );
-
-                }
-
-            };
-
-    } else {
-
-        console.error(
-            "ERROR: no se encontró el botón o el modal de administrador."
-        );
-
-    }
-
-
-    // ------------------------------------------
-    // BOTÓN CERRAR
-    // ------------------------------------------
-
-    if (
-        botonCerrar &&
-        modalLogin
-    ) {
-
-        botonCerrar.onclick =
-            function (event) {
-
-                event.preventDefault();
-
-                modalLogin.style.display =
+                loginModal.style.display =
                     "none";
 
-            };
 
-    }
-
-
-    // ------------------------------------------
-    // FORMULARIO LOGIN
-    // ------------------------------------------
-
-    if (
-        formularioLogin
-    ) {
-
-        formularioLogin.onsubmit =
-            async function (event) {
-
-                event.preventDefault();
+                loginForm.reset();
 
 
-                const email =
-                    document.getElementById(
-                        "login-email"
-                    )?.value
-                    ?.trim();
+                alert(
+                    "¡Bienvenido Modo Administrador!"
+                );
 
 
-                const password =
-                    document.getElementById(
-                        "login-password"
-                    )?.value;
+            } catch (
+                error
+            ) {
 
-
-                if (
-                    !email ||
-                    !password
-                ) {
-
-                    alert(
-                        "Ingresa correo y contraseña."
-                    );
-
-                    return;
-
-                }
-
-
-                try {
-
-                    console.log(
-                        "Intentando iniciar sesión en Firebase..."
-                    );
-
-
-                    await signInWithEmailAndPassword(
-                        auth,
-                        email,
-                        password
-                    );
-
-
-                    console.log(
-                        "Login administrador correcto."
-                    );
-
-
-                    if (
-                        modalLogin
-                    ) {
-
-                        modalLogin.style.display =
-                            "none";
-
-                    }
-
-
-                    formularioLogin.reset();
-
-
-                    alert(
-                        "¡Bienvenido Modo Administrador!"
-                    );
-
-
-                } catch (
+                console.error(
+                    "ERROR FIREBASE AUTH:",
                     error
-                ) {
-
-                    console.error(
-                        "ERROR FIREBASE AUTH:",
-                        error
-                    );
+                );
 
 
-                    alert(
-                        "Error de acceso: " +
-                        error.message
-                    );
+                alert(
+                    "Error de acceso: " +
+                    error.message
+                );
 
-                }
+            }
 
-            };
-
-    }
-
-}
-
-
-// ======================================================
-// INICIAR LOGIN
-// ======================================================
-
-if (
-    document.readyState ===
-    "loading"
-) {
-
-    document.addEventListener(
-        "DOMContentLoaded",
-        inicializarLoginAdministrador
+        }
     );
 
-} else {
-
-    inicializarLoginAdministrador();
-
 }
+
 
 // ======================================================
 // LOGOUT
@@ -734,7 +628,7 @@ if (
 
     btnLogout.addEventListener(
         "click",
-        async () => {
+        async function () {
 
             try {
 
@@ -753,6 +647,7 @@ if (
             ) {
 
                 console.error(
+                    "Error al cerrar sesión:",
                     error
                 );
 
@@ -762,7 +657,6 @@ if (
     );
 
 }
-
 
 // ======================================================
 // CAMBIO DE TIPO DE PRODUCTO
