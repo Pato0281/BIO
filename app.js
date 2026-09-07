@@ -479,139 +479,248 @@ onAuthStateChanged(
 
 
 // ======================================================
-// LOGIN
+// LOGIN ADMINISTRADOR
 // ======================================================
 
-if (btnOpenLogin) {
+function inicializarLoginAdministrador() {
 
-    btnOpenLogin.addEventListener(
-        "click",
-        function (event) {
+    const botonLogin =
+        document.getElementById(
+            "btn-open-login"
+        );
 
-            event.preventDefault();
+    const modalLogin =
+        document.getElementById(
+            "login-modal"
+        );
 
-            console.log(
-                "Botón Acceso Admin presionado."
-            );
+    const botonCerrar =
+        document.getElementById(
+            "btn-close-login"
+        );
 
-            if (!loginModal) {
+    const formularioLogin =
+        document.getElementById(
+            "login-form"
+        );
 
-                console.error(
-                    "ERROR: No se encontró #login-modal"
-                );
 
-                return;
-
-            }
-
-            loginModal.style.display =
-                "flex";
-
-        }
+    console.log(
+        "Inicializando acceso administrador..."
     );
 
-}
+
+    console.log(
+        "btn-open-login:",
+        botonLogin
+    );
+
+    console.log(
+        "login-modal:",
+        modalLogin
+    );
 
 
-if (btnCloseLogin) {
+    // ------------------------------------------
+    // BOTÓN ABRIR
+    // ------------------------------------------
 
-    btnCloseLogin.addEventListener(
-        "click",
-        function (event) {
+    if (
+        botonLogin &&
+        modalLogin
+    ) {
 
-            event.preventDefault();
+        botonLogin.onclick =
+            function (event) {
 
-            if (loginModal) {
+                event.preventDefault();
 
-                loginModal.style.display =
+                console.log(
+                    "ACCIONES: botón administrador presionado"
+                );
+
+
+                modalLogin.style.display =
+                    "flex";
+
+                modalLogin.style.visibility =
+                    "visible";
+
+                modalLogin.style.opacity =
+                    "1";
+
+
+                const campoEmail =
+                    document.getElementById(
+                        "login-email"
+                    );
+
+
+                if (
+                    campoEmail
+                ) {
+
+                    setTimeout(
+                        () => {
+                            campoEmail.focus();
+                        },
+                        100
+                    );
+
+                }
+
+            };
+
+    } else {
+
+        console.error(
+            "ERROR: no se encontró el botón o el modal de administrador."
+        );
+
+    }
+
+
+    // ------------------------------------------
+    // BOTÓN CERRAR
+    // ------------------------------------------
+
+    if (
+        botonCerrar &&
+        modalLogin
+    ) {
+
+        botonCerrar.onclick =
+            function (event) {
+
+                event.preventDefault();
+
+                modalLogin.style.display =
                     "none";
 
-            }
+            };
 
-        }
-    );
-
-}
+    }
 
 
-if (loginForm) {
+    // ------------------------------------------
+    // FORMULARIO LOGIN
+    // ------------------------------------------
 
-    loginForm.addEventListener(
-        "submit",
-        async function (event) {
+    if (
+        formularioLogin
+    ) {
 
-            event.preventDefault();
+        formularioLogin.onsubmit =
+            async function (event) {
 
-
-            const email =
-                document.getElementById(
-                    "login-email"
-                )?.value
-                ?.trim();
+                event.preventDefault();
 
 
-            const password =
-                document.getElementById(
-                    "login-password"
-                )?.value;
+                const email =
+                    document.getElementById(
+                        "login-email"
+                    )?.value
+                    ?.trim();
 
 
-            if (
-                !email ||
-                !password
-            ) {
-
-                alert(
-                    "Completa correo y contraseña."
-                );
-
-                return;
-
-            }
+                const password =
+                    document.getElementById(
+                        "login-password"
+                    )?.value;
 
 
-            try {
+                if (
+                    !email ||
+                    !password
+                ) {
 
-                await signInWithEmailAndPassword(
-                    auth,
-                    email,
-                    password
-                );
+                    alert(
+                        "Ingresa correo y contraseña."
+                    );
 
-
-                if (loginModal) {
-
-                    loginModal.style.display =
-                        "none";
+                    return;
 
                 }
 
 
-                loginForm.reset();
+                try {
+
+                    console.log(
+                        "Intentando iniciar sesión en Firebase..."
+                    );
 
 
-                alert(
-                    "¡Bienvenido Modo Administrador!"
-                );
+                    await signInWithEmailAndPassword(
+                        auth,
+                        email,
+                        password
+                    );
 
 
-            } catch (error) {
+                    console.log(
+                        "Login administrador correcto."
+                    );
 
-                console.error(
-                    "Error Firebase Auth:",
+
+                    if (
+                        modalLogin
+                    ) {
+
+                        modalLogin.style.display =
+                            "none";
+
+                    }
+
+
+                    formularioLogin.reset();
+
+
+                    alert(
+                        "¡Bienvenido Modo Administrador!"
+                    );
+
+
+                } catch (
                     error
-                );
+                ) {
+
+                    console.error(
+                        "ERROR FIREBASE AUTH:",
+                        error
+                    );
 
 
-                alert(
-                    "Error de acceso: " +
-                    error.message
-                );
+                    alert(
+                        "Error de acceso: " +
+                        error.message
+                    );
 
-            }
+                }
 
-        }
+            };
+
+    }
+
+}
+
+
+// ======================================================
+// INICIAR LOGIN
+// ======================================================
+
+if (
+    document.readyState ===
+    "loading"
+) {
+
+    document.addEventListener(
+        "DOMContentLoaded",
+        inicializarLoginAdministrador
     );
+
+} else {
+
+    inicializarLoginAdministrador();
 
 }
 
