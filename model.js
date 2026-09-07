@@ -1,6 +1,28 @@
 //======================================================
-// BÍO IA v3.0
-// model.js
+// BÍO IA
+// model.js V4
+//======================================================
+//
+// DATOS AUTOMÁTICOS DE LA IA:
+//
+// ✅ Nombre
+// ✅ Ingrediente activo
+// ✅ Concentración
+// ✅ Modo de acción
+// ✅ Función
+//
+// DATOS MANUALES DE LA APP:
+//
+// ✅ Plaga / Enfermedad 1
+// ✅ Plaga / Enfermedad 2
+// ✅ Plaga / Enfermedad 3
+// ✅ Plaga / Enfermedad 4
+// ✅ Dosis baja
+// ✅ Dosis alta
+// ✅ Unidad
+// ✅ Carencia
+// ✅ Reingreso
+//
 //======================================================
 
 export function crearProductoVacio() {
@@ -19,45 +41,77 @@ export function crearProductoVacio() {
 
         datos: {
 
-            tipo_registro: "quimico",
+            // ------------------------------------------
+            // IDENTIFICACIÓN
+            // ------------------------------------------
 
-            nombre: "",
+            tipo_registro:
+                "quimico",
 
-            fabricante: "",
+            nombre:
+                "",
 
-            registro: "",
+            ingrediente_activo:
+                "",
 
-            formulacion: "",
+            concentracion:
+                "",
 
-            concentracion: "",
 
-            ingrediente_activo: "",
+            // ------------------------------------------
+            // CARACTERÍSTICAS TÉCNICAS
+            // ------------------------------------------
 
-            grupo_quimico: "",
+            funcion:
+                [],
 
-            funcion: [],
+            modo_accion:
+                [],
 
-            modo_accion: [],
 
-            plagas_objetivo: [],
+            // ------------------------------------------
+            // CAMPOS MANUALES
+            // ------------------------------------------
 
-            enfermedades: [],
+            plaga_1:
+                "",
 
-            malezas: [],
+            plaga_2:
+                "",
 
-            cultivos: [],
+            plaga_3:
+                "",
 
-            dosis: "",
+            plaga_4:
+                "",
 
-            unidad_dosis: "",
 
-            carencia: "",
+            // ------------------------------------------
+            // DOSIFICACIÓN
+            // ------------------------------------------
 
-            reentrada: "",
+            dosis:
+                "",
 
-            compatibilidad: "",
+            dosis_baja:
+                "",
 
-            observaciones: ""
+            dosis_alta:
+                "",
+
+            unidad_dosis:
+                "",
+
+
+            // ------------------------------------------
+            // SEGURIDAD
+            // ------------------------------------------
+
+            carencia:
+                "",
+
+            reentrada:
+                ""
 
         }
 
