@@ -482,14 +482,27 @@ onAuthStateChanged(
 // LOGIN
 // ======================================================
 
-if (
-    btnOpenLogin &&
-    loginModal
-) {
+if (btnOpenLogin) {
 
     btnOpenLogin.addEventListener(
         "click",
-        () => {
+        function (event) {
+
+            event.preventDefault();
+
+            console.log(
+                "Botón Acceso Admin presionado."
+            );
+
+            if (!loginModal) {
+
+                console.error(
+                    "ERROR: No se encontró #login-modal"
+                );
+
+                return;
+
+            }
 
             loginModal.style.display =
                 "flex";
@@ -500,17 +513,20 @@ if (
 }
 
 
-if (
-    btnCloseLogin &&
-    loginModal
-) {
+if (btnCloseLogin) {
 
     btnCloseLogin.addEventListener(
         "click",
-        () => {
+        function (event) {
 
-            loginModal.style.display =
-                "none";
+            event.preventDefault();
+
+            if (loginModal) {
+
+                loginModal.style.display =
+                    "none";
+
+            }
 
         }
     );
@@ -518,13 +534,11 @@ if (
 }
 
 
-if (
-    loginForm
-) {
+if (loginForm) {
 
     loginForm.addEventListener(
         "submit",
-        async (event) => {
+        async function (event) {
 
             event.preventDefault();
 
@@ -533,7 +547,7 @@ if (
                 document.getElementById(
                     "login-email"
                 )?.value
-                    .trim();
+                ?.trim();
 
 
             const password =
@@ -565,9 +579,7 @@ if (
                 );
 
 
-                if (
-                    loginModal
-                ) {
+                if (loginModal) {
 
                     loginModal.style.display =
                         "none";
@@ -583,11 +595,10 @@ if (
                 );
 
 
-            } catch (
-                error
-            ) {
+            } catch (error) {
 
                 console.error(
+                    "Error Firebase Auth:",
                     error
                 );
 
@@ -603,7 +614,6 @@ if (
     );
 
 }
-
 
 // ======================================================
 // LOGOUT
