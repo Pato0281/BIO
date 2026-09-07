@@ -2,28 +2,6 @@
 // BÍO IA
 // model.js V4
 //======================================================
-//
-// DATOS AUTOMÁTICOS DE LA IA:
-//
-// ✅ Nombre
-// ✅ Ingrediente activo
-// ✅ Concentración
-// ✅ Modo de acción
-// ✅ Función
-//
-// DATOS MANUALES DE LA APP:
-//
-// ✅ Plaga / Enfermedad 1
-// ✅ Plaga / Enfermedad 2
-// ✅ Plaga / Enfermedad 3
-// ✅ Plaga / Enfermedad 4
-// ✅ Dosis baja
-// ✅ Dosis alta
-// ✅ Unidad
-// ✅ Carencia
-// ✅ Reingreso
-//
-//======================================================
 
 export function crearProductoVacio() {
 
@@ -41,13 +19,10 @@ export function crearProductoVacio() {
 
         datos: {
 
-            // ------------------------------------------
-            // IDENTIFICACIÓN
-            // ------------------------------------------
-
             tipo_registro:
                 "quimico",
 
+            // IA
             nombre:
                 "",
 
@@ -57,11 +32,6 @@ export function crearProductoVacio() {
             concentracion:
                 "",
 
-
-            // ------------------------------------------
-            // CARACTERÍSTICAS TÉCNICAS
-            // ------------------------------------------
-
             funcion:
                 [],
 
@@ -69,29 +39,9 @@ export function crearProductoVacio() {
                 [],
 
 
-            // ------------------------------------------
-            // CAMPOS MANUALES
-            // ------------------------------------------
-
-            plaga_1:
-                "",
-
-            plaga_2:
-                "",
-
-            plaga_3:
-                "",
-
-            plaga_4:
-                "",
-
-
-            // ------------------------------------------
-            // DOSIFICACIÓN
-            // ------------------------------------------
-
-            dosis:
-                "",
+            // Usuario
+            plagas_objetivo:
+                [],
 
             dosis_baja:
                 "",
@@ -101,11 +51,6 @@ export function crearProductoVacio() {
 
             unidad_dosis:
                 "",
-
-
-            // ------------------------------------------
-            // SEGURIDAD
-            // ------------------------------------------
 
             carencia:
                 "",
