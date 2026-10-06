@@ -1,7 +1,7 @@
 // ======================================================
 // SANIDADAPP / BIO IA
 // app.js
-// V FINAL - ARQUITECTURA ACTUAL
+// V FINAL - SINCRONIZADO CON NUEVO INDEX.HTML
 // ======================================================
 //
 // FLUJO:
@@ -15,26 +15,32 @@
 // Nombre
 // Ingrediente activo
 // Concentración
-// Modo de acción
 // Función
+// Modo de acción
 //   ↓
 // AGRICULTOR
 //   ↓
-// Plaga / Enfermedad
+// Plaga 1 / 2 / 3 / 4
 // Dosis baja
 // Dosis alta
 // Unidad
 // Carencia
 // Reingreso
 //   ↓
-// BIO
-//   ↓
-// Tabla 1 / 15 / 100 / 160 L
-//   ↓
 // Confirmación
 //   ↓
 // Firebase
 //
+// IMPORTANTE:
+//
+// La IA NO rellena:
+// - Plagas
+// - Dosis
+// - Unidad
+// - Carencia
+// - Reingreso
+//
+// Esos datos los ingresa el agricultor.
 // ======================================================
 
 
@@ -314,7 +320,7 @@ const doseConfirmStatus =
 
 
 // ======================================================
-// CAMPOS AUXILIARES
+// CAMPOS BÁSICOS
 // ======================================================
 
 const recipeId =
@@ -332,10 +338,35 @@ const recipeApp =
         "recipe-app"
     );
 
-const recipePlagas =
+
+// ======================================================
+// PLAGAS
+// ======================================================
+
+const recipePlaga1 =
     document.getElementById(
-        "recipe-plagas"
+        "recipe-plaga-1"
     );
+
+const recipePlaga2 =
+    document.getElementById(
+        "recipe-plaga-2"
+    );
+
+const recipePlaga3 =
+    document.getElementById(
+        "recipe-plaga-3"
+    );
+
+const recipePlaga4 =
+    document.getElementById(
+        "recipe-plaga-4"
+    );
+
+
+// ======================================================
+// QUÍMICO
+// ======================================================
 
 const recipeActivo =
     document.getElementById(
@@ -359,7 +390,7 @@ const recipeReentrada =
 
 
 // ======================================================
-// AUTENTICACIÓN - ESTADO
+// AUTENTICACIÓN
 // ======================================================
 
 onAuthStateChanged(
@@ -371,18 +402,31 @@ onAuthStateChanged(
             esAdmin = true;
 
             if (btnOpenLogin) {
+
                 btnOpenLogin.style.display =
                     "none";
+
             }
 
             if (adminLoggedInfo) {
+
                 adminLoggedInfo.style.display =
                     "inline-block";
+
+            }
+
+            if (btnLogout) {
+
+                btnLogout.style.display =
+                    "inline-block";
+
             }
 
             if (sectionFormContainer) {
+
                 sectionFormContainer.style.display =
                     "block";
+
             }
 
         } else {
@@ -390,18 +434,31 @@ onAuthStateChanged(
             esAdmin = false;
 
             if (btnOpenLogin) {
+
                 btnOpenLogin.style.display =
                     "inline-block";
+
             }
 
             if (adminLoggedInfo) {
+
                 adminLoggedInfo.style.display =
                     "none";
+
+            }
+
+            if (btnLogout) {
+
+                btnLogout.style.display =
+                    "none";
+
             }
 
             if (sectionFormContainer) {
+
                 sectionFormContainer.style.display =
                     "none";
+
             }
 
         }
@@ -461,7 +518,7 @@ if (
 
 
 // ======================================================
-// LOGIN FIREBASE
+// LOGIN
 // ======================================================
 
 if (loginForm) {
@@ -580,7 +637,7 @@ if (btnLogout) {
 
 
 // ======================================================
-// CAMBIO DE TIPO DE PRODUCTO
+// CAMBIO TIPO REGISTRO
 // ======================================================
 
 if (tipoRegistroSelect) {
@@ -682,7 +739,10 @@ if (btnWorldBio) {
             if (statConditionalCard) {
 
                 statConditionalCard.innerHTML =
-                    'Eficacia Alta <span id="stat-alta">0</span>';
+                    `
+                    Eficacia Alta
+                    <span id="stat-alta">0</span>
+                    `;
 
             }
 
@@ -690,6 +750,17 @@ if (btnWorldBio) {
                 "todos";
 
             resetearFiltrosBotones();
+
+            if (tipoRegistroSelect) {
+
+                tipoRegistroSelect.value =
+                    "bio";
+
+                alternarCamposFormulario(
+                    "bio"
+                );
+
+            }
 
             calcularMetricasYRender();
 
@@ -739,7 +810,10 @@ if (btnWorldQui) {
             if (statConditionalCard) {
 
                 statConditionalCard.innerHTML =
-                    'Sistémicos <span id="stat-alta">0</span>';
+                    `
+                    Sistémicos
+                    <span id="stat-alta">0</span>
+                    `;
 
             }
 
@@ -747,6 +821,17 @@ if (btnWorldQui) {
                 "todos";
 
             resetearFiltrosBotones();
+
+            if (tipoRegistroSelect) {
+
+                tipoRegistroSelect.value =
+                    "quimico";
+
+                alternarCamposFormulario(
+                    "quimico"
+                );
+
+            }
 
             calcularMetricasYRender();
 
@@ -823,7 +908,7 @@ filterButtons.forEach(
 
 
 // ======================================================
-// FIREBASE - ESCUCHA EN TIEMPO REAL
+// FIREBASE - TIEMPO REAL
 // ======================================================
 
 onSnapshot(
@@ -863,7 +948,7 @@ onSnapshot(
 
 
 // ======================================================
-// DOSIFICACIÓN - UNIDAD
+// OBTENER UNIDAD
 // ======================================================
 
 function obtenerUnidadDosis() {
@@ -881,7 +966,7 @@ function obtenerUnidadDosis() {
 
 
 // ======================================================
-// DOSIFICACIÓN - FORMATO
+// FORMATEAR NÚMERO
 // ======================================================
 
 function formatearNumero(
@@ -902,14 +987,13 @@ function formatearNumero(
 
     return Number(
         numero.toFixed(4)
-    )
-        .toString();
+    ).toString();
 
 }
 
 
 // ======================================================
-// DOSIFICACIÓN - TABLA
+// ACTUALIZAR TABLA DOSIS
 // ======================================================
 
 function actualizarTablaDosis() {
@@ -963,7 +1047,7 @@ function actualizarTablaDosis() {
                 "block";
 
             doseValidationMessage.textContent =
-                "Ingresa la dosis baja, la dosis alta y selecciona la unidad de medida.";
+                "Ingresa la dosis baja, la dosis alta y selecciona la unidad.";
 
         }
 
@@ -1001,18 +1085,14 @@ function actualizarTablaDosis() {
         (litrosAgua) => {
 
             const valorBaja =
-                (
-                    baja *
-                    litrosAgua /
-                    100
-                );
+                baja *
+                litrosAgua /
+                100;
 
             const valorAlta =
-                (
-                    alta *
-                    litrosAgua /
-                    100
-                );
+                alta *
+                litrosAgua /
+                100;
 
 
             const celdaBaja =
@@ -1049,21 +1129,29 @@ function actualizarTablaDosis() {
 
         doseConfirmationSummary.innerHTML =
             `
-            <strong>Resumen de dosificación</strong><br>
-            Referencia: 100 L de agua<br>
-            Preventivo (baja):
-            <strong>${formatearNumero(baja)} ${unidad}</strong><br>
-            Curativo (alta):
-            <strong>${formatearNumero(alta)} ${unidad}</strong>
+            <strong>
+                Resumen de dosificación
+            </strong>
+            <br>
+            Referencia: 100 L de agua
+            <br>
+            Preventivo:
+            <strong>
+                ${formatearNumero(baja)} ${unidad}
+            </strong>
+            <br>
+            Curativo:
+            <strong>
+                ${formatearNumero(alta)} ${unidad}
+            </strong>
             `;
 
     }
 
 
-    // Cada modificación obliga a confirmar nuevamente.
-
     dosisConfirmada =
         false;
+
 
     if (doseConfirmStatus) {
 
@@ -1076,7 +1164,7 @@ function actualizarTablaDosis() {
 
 
 // ======================================================
-// EVENTOS DOSIFICACIÓN
+// EVENTOS DOSIS
 // ======================================================
 
 if (doseLow) {
@@ -1168,6 +1256,19 @@ if (btnConfirmDoses) {
             }
 
 
+            if (
+                alta < baja
+            ) {
+
+                alert(
+                    "La dosis alta no puede ser menor que la dosis baja."
+                );
+
+                return;
+
+            }
+
+
             dosisConfirmada =
                 true;
 
@@ -1194,7 +1295,7 @@ if (btnConfirmDoses) {
 
 
 // ======================================================
-// CORREGIR DOSIS
+// MODIFICAR DOSIS
 // ======================================================
 
 if (btnCancelDoses) {
@@ -1213,7 +1314,6 @@ if (btnCancelDoses) {
 
             }
 
-
             if (doseValidationMessage) {
 
                 doseValidationMessage.style.display =
@@ -1231,7 +1331,7 @@ if (btnCancelDoses) {
 
 
 // ======================================================
-// CONSTRUIR TEXTO DE DOSIS
+// TEXTO DOSIS
 // ======================================================
 
 function construirTextoDosis() {
@@ -1271,7 +1371,95 @@ function construirTextoDosis() {
 
 
 // ======================================================
-// TABLA DE DOSIS PARA LAS TARJETAS
+// OBTENER PLAGAS DE LOS 4 CAMPOS
+// ======================================================
+
+function obtenerPlagasFormulario() {
+
+    const campos =
+        [
+            recipePlaga1,
+            recipePlaga2,
+            recipePlaga3,
+            recipePlaga4
+        ];
+
+
+    const plagas =
+        campos
+            .map(
+                (campo) =>
+                    campo?.value
+                        ?.trim() ||
+                    ""
+            )
+            .filter(
+                (plaga) =>
+                    plaga !== ""
+            );
+
+
+    return plagas;
+
+}
+
+
+// ======================================================
+// CARGAR PLAGAS EN FORMULARIO
+// ======================================================
+
+function cargarPlagasFormulario(
+    plagas
+) {
+
+    const arreglo =
+        Array.isArray(
+            plagas
+        )
+            ? plagas
+            : [];
+
+
+    if (recipePlaga1) {
+
+        recipePlaga1.value =
+            arreglo[0] ||
+            "";
+
+    }
+
+
+    if (recipePlaga2) {
+
+        recipePlaga2.value =
+            arreglo[1] ||
+            "";
+
+    }
+
+
+    if (recipePlaga3) {
+
+        recipePlaga3.value =
+            arreglo[2] ||
+            "";
+
+    }
+
+
+    if (recipePlaga4) {
+
+        recipePlaga4.value =
+            arreglo[3] ||
+            "";
+
+    }
+
+}
+
+
+// ======================================================
+// TABLA DOSIS TARJETAS
 // ======================================================
 
 function generarTablaDosisHTML(
@@ -1300,13 +1488,17 @@ function generarTablaDosisHTML(
     ) {
 
         return `
-            <div style="
-                margin-top:10px;
-                padding:10px;
-                background:#f5f5f5;
-                border-radius:6px;
-            ">
-                <strong>Dosificación:</strong>
+            <div
+                style="
+                    margin-top:10px;
+                    padding:10px;
+                    background:#f5f5f5;
+                    border-radius:6px;
+                "
+            >
+                <strong>
+                    Dosificación:
+                </strong>
                 No registrada.
             </div>
         `;
@@ -1344,6 +1536,7 @@ function generarTablaDosisHTML(
             filas +=
                 `
                 <tr>
+
                     <td>
                         <strong>
                             ${litrosAgua} L
@@ -1359,6 +1552,7 @@ function generarTablaDosisHTML(
                         ${formatearNumero(valorAlta)}
                         ${unidad}
                     </td>
+
                 </tr>
                 `;
 
@@ -1367,14 +1561,18 @@ function generarTablaDosisHTML(
 
 
     return `
-        <div style="margin-top:12px;">
+        <div
+            style="
+                margin-top:12px;
+            "
+        >
 
             <strong>
                 Dosificación
             </strong>
 
+
             <div
-                class="tabla-dosis-container"
                 style="
                     overflow-x:auto;
                     margin-top:8px;
@@ -1382,7 +1580,6 @@ function generarTablaDosisHTML(
             >
 
                 <table
-                    class="tabla-dosis"
                     style="
                         width:100%;
                         border-collapse:collapse;
@@ -1399,17 +1596,16 @@ function generarTablaDosisHTML(
 
                             <th>
                                 Preventivo
-                                (Baja)
                             </th>
 
                             <th>
                                 Curativo
-                                (Alta)
                             </th>
 
                         </tr>
 
                     </thead>
+
 
                     <tbody>
 
@@ -1439,7 +1635,8 @@ function calcularMetricasYRender() {
                 (
                     registro.tipo_registro ||
                     "bio"
-                ) === mundoActual
+                ) ===
+                mundoActual
         );
 
 
@@ -1641,11 +1838,13 @@ function calcularMetricasYRender() {
                     .map(
                         (funcion) =>
                             `
-                            <span class="tag ${
-                                esQuimico
-                                    ? "tag-qui-label"
-                                    : ""
-                            }">
+                            <span
+                                class="tag ${
+                                    esQuimico
+                                        ? "tag-qui-label"
+                                        : ""
+                                }"
+                            >
                                 ${funcion}
                             </span>
                             `
@@ -1670,10 +1869,15 @@ function calcularMetricasYRender() {
                                 color:#555;
                             "
                         >
+
                             <strong>
                                 Plagas / Enfermedades:
                             </strong>
-                            ${plagas.join(", ")}
+
+                            ${plagas.join(
+                                ", "
+                            )}
+
                         </p>
                     `
                     : "";
@@ -1693,6 +1897,7 @@ function calcularMetricasYRender() {
                             >
                                 ✏️
                             </button>
+
 
                             <button
                                 class="btn-action btn-delete"
@@ -1723,9 +1928,8 @@ function calcularMetricasYRender() {
                     `
                     ${botonesAccion}
 
-                    <h3
-                        class="qui-title"
-                    >
+
+                    <h3 class="qui-title">
                         ${registro.nombre || ""}
                     </h3>
 
@@ -1744,6 +1948,7 @@ function calcularMetricasYRender() {
                     >
 
                         <p>
+
                             <strong>
                                 I. Activo:
                             </strong>
@@ -1752,10 +1957,12 @@ function calcularMetricasYRender() {
                                 registro.ingrediente_activo ||
                                 "No especificado"
                             }
+
                         </p>
 
 
                         <p>
+
                             <strong>
                                 Concentración:
                             </strong>
@@ -1764,15 +1971,18 @@ function calcularMetricasYRender() {
                                 registro.concentracion ||
                                 "No especificada"
                             }
+
                         </p>
 
 
                         <p>
+
                             <strong>
                                 Modo Acción:
                             </strong>
 
                             ${modos}
+
                         </p>
 
                     </div>
@@ -1802,6 +2012,7 @@ function calcularMetricasYRender() {
                     >
 
                         <p>
+
                             <strong>
                                 Período de Carencia:
                             </strong>
@@ -1810,10 +2021,12 @@ function calcularMetricasYRender() {
                                 registro.carencia ||
                                 "No indicado"
                             }
+
                         </p>
 
 
                         <p>
+
                             <strong>
                                 Seguridad de Reentrada:
                             </strong>
@@ -1822,6 +2035,7 @@ function calcularMetricasYRender() {
                                 registro.reentrada ||
                                 "No indicado"
                             }
+
                         </p>
 
                     </div>
@@ -1835,8 +2049,10 @@ function calcularMetricasYRender() {
                             <div
                                 class="warning-box"
                             >
+
                                 ⚠️
                                 ${registro.contraindicacion}
+
                             </div>
                         `
                         : "";
@@ -1845,6 +2061,7 @@ function calcularMetricasYRender() {
                 card.innerHTML =
                     `
                     ${botonesAccion}
+
 
                     <h3>
                         ${registro.nombre || ""}
@@ -1859,13 +2076,16 @@ function calcularMetricasYRender() {
 
                         ${tagsHTML}
 
+
                         <span
                             class="tag-efectividad"
                         >
+
                             ${
                                 registro.efectividad ||
                                 "En evaluación"
                             }
+
                         </span>
 
                     </div>
@@ -1898,6 +2118,7 @@ function calcularMetricasYRender() {
                     >
 
                         <p>
+
                             <strong>
                                 Ingredientes:
                             </strong>
@@ -1906,10 +2127,12 @@ function calcularMetricasYRender() {
                                 registro.ingredientes ||
                                 "No especificados"
                             }
+
                         </p>
 
 
                         <p>
+
                             <strong>
                                 Preparación:
                             </strong>
@@ -1918,6 +2141,7 @@ function calcularMetricasYRender() {
                                 registro.preparacion ||
                                 "No especificada"
                             }
+
                         </p>
 
                     </div>
@@ -1940,7 +2164,7 @@ function calcularMetricasYRender() {
 
 
 // ======================================================
-// EVENTOS DE TARJETAS
+// EVENTOS TARJETAS
 // ======================================================
 
 function asignarEventosTarjetas() {
@@ -2038,7 +2262,8 @@ function asignarEventosTarjetas() {
                         const item =
                             todosLosDatos.find(
                                 (registro) =>
-                                    registro.id === id
+                                    registro.id ===
+                                    id
                             );
 
 
@@ -2179,28 +2404,18 @@ function cargarItemEnFormulario(
     }
 
 
-    if (recipeApp) {
+    // -----------------------------------------------
+    // PLAGAS
+    // -----------------------------------------------
 
-        recipeApp.value =
-            item.modo_aplicacion ||
-            "";
-
-    }
+    cargarPlagasFormulario(
+        item.plagas_objetivo
+    );
 
 
-    if (recipePlagas) {
-
-        recipePlagas.value =
-            Array.isArray(
-                item.plagas_objetivo
-            )
-                ? item.plagas_objetivo.join(
-                    ", "
-                )
-                : "";
-
-    }
-
+    // -----------------------------------------------
+    // FUNCIÓN
+    // -----------------------------------------------
 
     document
         .querySelectorAll(
@@ -2220,6 +2435,10 @@ function cargarItemEnFormulario(
             }
         );
 
+
+    // -----------------------------------------------
+    // BIO
+    // -----------------------------------------------
 
     if (
         (
@@ -2285,7 +2504,14 @@ function cargarItemEnFormulario(
 
         }
 
-    } else {
+    }
+
+
+    // -----------------------------------------------
+    // QUÍMICO
+    // -----------------------------------------------
+
+    else {
 
         if (recipeActivo) {
 
@@ -2343,6 +2569,10 @@ function cargarItemEnFormulario(
 
     }
 
+
+    // -----------------------------------------------
+    // DOSIS
+    // -----------------------------------------------
 
     if (doseWater) {
 
@@ -2444,7 +2674,7 @@ if (recipeForm) {
 
 
             // ------------------------------------------
-            // VALIDAR DOSIFICACIÓN
+            // VALIDAR DOSIS
             // ------------------------------------------
 
             const baja =
@@ -2469,6 +2699,33 @@ if (recipeForm) {
 
                 alert(
                     "Debes ingresar la dosis baja, la dosis alta y seleccionar la unidad."
+                );
+
+                return;
+
+            }
+
+
+            if (
+                baja < 0 ||
+                alta < 0
+            ) {
+
+                alert(
+                    "Las dosis no pueden ser negativas."
+                );
+
+                return;
+
+            }
+
+
+            if (
+                alta < baja
+            ) {
+
+                alert(
+                    "La dosis alta no puede ser menor que la dosis baja."
                 );
 
                 return;
@@ -2502,6 +2759,10 @@ if (recipeForm) {
                 mundoActual;
 
 
+            // ------------------------------------------
+            // FUNCIONES
+            // ------------------------------------------
+
             const funciones =
                 [];
 
@@ -2524,32 +2785,9 @@ if (recipeForm) {
             // ------------------------------------------
             // PLAGAS
             // ------------------------------------------
-            //
-            // Por ahora index.html tiene un campo único.
-            //
-            // En el siguiente paso lo cambiaremos
-            // a Plaga 1 / 2 / 3 / 4.
-            //
-            // Este bloque ya guarda el resultado
-            // como arreglo.
-            // ------------------------------------------
-
-            const plagasTexto =
-                recipePlagas?.value ||
-                "";
-
 
             const plagasArray =
-                plagasTexto
-                    .split(",")
-                    .map(
-                        (plaga) =>
-                            plaga.trim()
-                    )
-                    .filter(
-                        (plaga) =>
-                            plaga !== ""
-                    );
+                obtenerPlagasFormulario();
 
 
             // ------------------------------------------
@@ -2598,7 +2836,7 @@ if (recipeForm) {
 
 
             // ------------------------------------------
-            // MUNDO BIO
+            // BIO
             // ------------------------------------------
 
             if (
@@ -2653,7 +2891,7 @@ if (recipeForm) {
 
 
             // ------------------------------------------
-            // MUNDO QUÍMICO
+            // QUÍMICO
             // ------------------------------------------
 
             else {
@@ -2708,7 +2946,7 @@ if (recipeForm) {
 
 
             // ------------------------------------------
-            // GUARDAR
+            // GUARDAR FIREBASE
             // ------------------------------------------
 
             try {
@@ -2899,21 +3137,7 @@ if (searchInput) {
 
 
 // ======================================================
-// ESCÁNER DE ETIQUETA
-// ======================================================
-//
-// IMPORTANTE:
-//
-// app.js NO llama directamente a Gemini,
-// OpenRouter ni ninguna API de IA.
-//
-// Todo pasa por:
-//      analizarEtiqueta(file)
-//              ↓
-//             ia.js
-//              ↓
-//      servidor de IA
-//
+// ESCÁNER IA
 // ======================================================
 
 if (
@@ -2985,7 +3209,7 @@ if (
                 );
 
                 console.log(
-                    "BIO IA - INICIO ANÁLISIS"
+                    "SANIDADAPP - INICIO ANÁLISIS IA"
                 );
 
                 console.log(
@@ -3010,7 +3234,7 @@ if (
 
 
                 console.log(
-                    "BIO IA - RESULTADO:",
+                    "SANIDADAPP - RESULTADO IA:",
                     resultado
                 );
 
@@ -3034,7 +3258,7 @@ if (
 
 
                 // --------------------------------------
-                // TIPO DE REGISTRO
+                // TIPO
                 // --------------------------------------
 
                 const tipo =
@@ -3177,27 +3401,14 @@ if (
                     );
 
 
-                // --------------------------------------
-                // MUY IMPORTANTE
-                // --------------------------------------
-                //
-                // NO hacemos:
-                //
-                // plagas = IA
-                // dosis = IA
-                // carencia = IA
-                // reentrada = IA
-                //
-                // Esos campos pertenecen al agricultor.
-                // --------------------------------------
+                // ======================================
+                // LIMPIAR DATOS QUE DEBE INGRESAR
+                // EL AGRICULTOR
+                // ======================================
 
-
-                if (recipePlagas) {
-
-                    recipePlagas.value =
-                        "";
-
-                }
+                cargarPlagasFormulario(
+                    []
+                );
 
 
                 if (doseLow) {
@@ -3266,12 +3477,16 @@ if (
                 }
 
 
-                // --------------------------------------
-                // MENSAJE FINAL
-                // --------------------------------------
+                if (doseValidationMessage) {
+
+                    doseValidationMessage.style.display =
+                        "none";
+
+                }
+
 
                 alert(
-                    "Producto identificado correctamente. Ahora ingresa manualmente la plaga, dosis, unidad, carencia y reingreso."
+                    "Producto identificado correctamente. Ahora ingresa manualmente las plagas, dosis, carencia y reingreso."
                 );
 
 
@@ -3329,21 +3544,35 @@ alternarCamposFormulario(
 
 actualizarTablaDosis();
 
+resetearFiltrosBotones();
+
 
 console.log(
     "===================================="
 );
 
 console.log(
-    "BIO IA APP.JS CARGADO CORRECTAMENTE"
+    "SANIDADAPP APP.JS CARGADO"
 );
 
 console.log(
-    "IA directa desde navegador: DESACTIVADA"
+    "Firebase: ACTIVADO"
+);
+
+console.log(
+    "Firebase Auth: ACTIVADO"
+);
+
+console.log(
+    "Firestore: ACTIVADO"
 );
 
 console.log(
     "IA mediante ia.js: ACTIVADA"
+);
+
+console.log(
+    "Plagas manuales 1-4: ACTIVADAS"
 );
 
 console.log(
