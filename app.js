@@ -1,156 +1,154 @@
-// ============================================================
-// SANIDADAPP / BIO IA
-// app.js
-// ============================================================
 
-// ------------------------------------------------------------
-// FIREBASE
-// ------------------------------------------------------------
+/* =========================================================
+   SANIDADAPP - CONTROL FITOSANITARIO
+   Archivo: app.js
 
-import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+   Funciones:
+   - Firebase Firestore y Authentication
+   - Mundos BIO y QUÍMICO
+   - Búsqueda y filtros
+   - Alta, edición y eliminación de productos
+   - Cuatro campos de plagas
+   - Dosificación por 100 litros o por hectárea
+   - Tabla automática para 1, 15, 100 y 160 litros
+   - Compatibilidad con registros antiguos
+   - Sin fotografías, Gemini ni análisis mediante IA
+   ========================================================= */
+
+
+// =========================================================
+// 1. FIREBASE
+// =========================================================
+
+import { initializeApp } from
+  "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
 
 import {
   getFirestore,
   collection,
   addDoc,
   onSnapshot,
+  query,
   doc,
   updateDoc,
   deleteDoc
-} from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+} from
+  "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
 import {
   getAuth,
   signInWithEmailAndPassword,
   signOut,
   onAuthStateChanged
-} from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
-
-import { analizarEtiqueta } from "./ia.js";
-import { firebaseConfig } from "./config.js";
+} from
+  "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
 
 
-// ------------------------------------------------------------
-// INICIALIZACIÓN
-// ------------------------------------------------------------
+const firebaseConfig = {
+  apiKey: "AIzaSyC6ZZTc1cvEu5sT8yLtC4mKIwMDbPT0L-4",
+  authDomain: "bio-control-cdc2e.firebaseapp.com",
+  projectId: "bio-control-cdc2e",
+  storageBucket: "bio-control-cdc2e.firebasestorage.app",
+  messagingSenderId: "751277149960",
+  appId: "1:751277149960:web:dda2d68b510b85acb9a6bd"
+};
 
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 const auth = getAuth(app);
-
 const recetasRef = collection(db, "recetas");
 
 
-// ------------------------------------------------------------
-// ESTADO GLOBAL
-// ------------------------------------------------------------
+// =========================================================
+// 2. ESTADO
+// =========================================================
 
-let todosLosDatos = [];
+let esAdmin = false;
+let usuarioActual = null;
 let mundoActual = "bio";
 let filtroFuncionActual = "todos";
-let textoBusquedaActual = "";
-let esAdmin = false;
-
-let dosisConfirmada = false;
+let todosLosDatos = [];
+let errorLecturaFirebase = null;
 
 
-// ------------------------------------------------------------
-// REFERENCIAS AL DOM
-// ------------------------------------------------------------
+// =========================================================
+// 3. ELEMENTOS HTML
+// =========================================================
 
-// ADMIN
+// Mundos
+const btnWorldBio = document.getElementById("btn-world-bio");
+const btnWorldQui = document.getElementById("btn-world-qui");
+
+// Métricas
+const statsTitle = document.getElementById("stats-title");
+const resultsTitle = document.getElementById("results-title");
+const statTotal = document.getElementById("stat-total");
+const statConditionalCard = document.getElementById("stat-conditional-card");
+
+// Búsqueda y resultados
+const searchInput = document.getElementById("search-input");
+const filterButtons = document.querySelectorAll(".btn-filter");
+const recipesContainer = document.getElementById("recipes-container");
+
+// Administración
 const btnOpenLogin = document.getElementById("btn-open-login");
 const adminLoggedInfo = document.getElementById("admin-logged-info");
 const btnLogout = document.getElementById("btn-logout");
-
 const loginModal = document.getElementById("login-modal");
 const loginForm = document.getElementById("login-form");
 const btnCloseLogin = document.getElementById("btn-close-login");
 
-
-// MUNDOS
-const btnWorldBio = document.getElementById("btn-world-bio");
-const btnWorldQui = document.getElementById("btn-world-qui");
-
-
-// MÉTRICAS
-const statsTitle = document.getElementById("stats-title");
-const statTotal = document.getElementById("stat-total");
-const statConditionalCard = document.getElementById("stat-conditional-card");
-const statAlta = document.getElementById("stat-alta");
-
-
-// BÚSQUEDA
-const searchInput = document.getElementById("search-input");
-
-
-// RESULTADOS
-const resultsTitle = document.getElementById("results-title");
-const recipesContainer = document.getElementById("recipes-container");
-
-
-// FORMULARIO
+// Formulario
 const sectionFormContainer = document.querySelector(".form-section");
 const recipeForm = document.getElementById("recipe-form");
-const formTitle = document.getElementById("form-title");
 const recipeId = document.getElementById("recipe-id");
+const formTitle = document.getElementById("form-title");
+const btnFormSubmit = document.getElementById("btn-form-submit");
+const btnFormCancel = document.getElementById("btn-form-cancel");
 
 const tipoRegistroSelect = document.getElementById("form-tipo-registro");
 const recipeName = document.getElementById("recipe-name");
+const recipeFabricante = document.getElementById("recipe-fabricante");
+const recipeRegistro = document.getElementById("recipe-registro");
 
-
-// FUNCIÓN
+// Función
 const functionCheckboxes = document.querySelectorAll(
   'input[name="funcion"]'
 );
 
+// Plagas
+const plagaInputs = [
+  document.getElementById("recipe-plaga-1"),
+  document.getElementById("recipe-plaga-2"),
+  document.getElementById("recipe-plaga-3"),
+  document.getElementById("recipe-plaga-4")
+];
 
-// PLAGAS
-const recipePlaga1 = document.getElementById("recipe-plaga-1");
-const recipePlaga2 = document.getElementById("recipe-plaga-2");
-const recipePlaga3 = document.getElementById("recipe-plaga-3");
-const recipePlaga4 = document.getElementById("recipe-plaga-4");
+// Dosificación
+const doseTypeSelect = document.getElementById("recipe-dose-type");
+const doseWaterFields = document.getElementById("dose-water-fields");
+const doseHaFields = document.getElementById("dose-ha-fields");
 
-
-// DOSIS
-const recipeDoseWater = document.getElementById("recipe-dose-water");
-const recipeDoseLow = document.getElementById("recipe-dose-low");
-const recipeDoseHigh = document.getElementById("recipe-dose-high");
+const doseValueInput = document.getElementById("recipe-dose-value");
+const doseLowInput = document.getElementById("recipe-dose-low");
+const doseHighInput = document.getElementById("recipe-dose-high");
+const doseHaWaterInput = document.getElementById("recipe-dose-ha-water");
+const doseWaterBaseInput = document.getElementById("recipe-dose-water-base");
 
 const doseUnitRadios = document.querySelectorAll(
   'input[name="dose-unit"]'
 );
 
-const doseValidationMessage = document.getElementById(
-  "dose-validation-message"
-);
+const doseTableWrapper = document.getElementById("dose-table-wrapper");
+const doseValidationMessage = document.getElementById("dose-validation-message");
+const doseConfirmationSummary = document.getElementById("dose-confirmation-summary");
+const doseConfirmBox = document.getElementById("dose-confirm-box");
+const doseConfirmStatus = document.getElementById("dose-confirm-status");
 
-const doseTableWrapper = document.getElementById(
-  "dose-table-wrapper"
-);
+const btnConfirmDoses = document.getElementById("btn-confirm-doses");
+const btnCancelDoses = document.getElementById("btn-cancel-doses");
 
-const doseConfirmationSummary = document.getElementById(
-  "dose-confirmation-summary"
-);
-
-const doseConfirmBox = document.getElementById(
-  "dose-confirm-box"
-);
-
-const btnConfirmDoses = document.getElementById(
-  "btn-confirm-doses"
-);
-
-const btnCancelDoses = document.getElementById(
-  "btn-cancel-doses"
-);
-
-const doseConfirmStatus = document.getElementById(
-  "dose-confirm-status"
-);
-
-
-// TABLA DE DOSIS
+// Celdas de la tabla
 const doseCells = {
   1: {
     low: document.getElementById("dose-low-1"),
@@ -170,90 +168,32 @@ const doseCells = {
   }
 };
 
-
-// COMPATIBILIDAD
+// Campo de compatibilidad con registros antiguos
 const recipeApp = document.getElementById("recipe-app");
 
-
 // BIO
-const recipeEfectividad = document.getElementById(
-  "recipe-efectividad"
-);
-
-const recipeContra = document.getElementById(
-  "recipe-contra"
-);
-
-const recipeIngredients = document.getElementById(
-  "recipe-ingredients"
-);
-
-const recipePrep = document.getElementById(
-  "recipe-prep"
-);
-
+const recipeEfectividad = document.getElementById("recipe-efectividad");
+const recipeContra = document.getElementById("recipe-contra");
+const recipeIngredients = document.getElementById("recipe-ingredients");
+const recipePrep = document.getElementById("recipe-prep");
 
 // QUÍMICOS
-const recipeActivo = document.getElementById(
-  "recipe-activo"
-);
+const recipeActivo = document.getElementById("recipe-activo");
+const recipeConcentracion = document.getElementById("recipe-concentracion");
+const recipeCarencia = document.getElementById("recipe-carencia");
+const recipeReentrada = document.getElementById("recipe-reentrada");
 
-const recipeConcentracion = document.getElementById(
-  "recipe-concentracion"
-);
-
-const recipeCarencia = document.getElementById(
-  "recipe-carencia"
-);
-
-const recipeReentrada = document.getElementById(
-  "recipe-reentrada"
-);
-
-const modoAccionRadios = document.querySelectorAll(
+const modoAccionCheckboxes = document.querySelectorAll(
   'input[name="modo_accion"]'
 );
 
 
-// BOTONES FORMULARIO
-const btnFormSubmit = document.getElementById(
-  "btn-form-submit"
-);
+// =========================================================
+// 4. FUNCIONES GENERALES
+// =========================================================
 
-const btnFormCancel = document.getElementById(
-  "btn-form-cancel"
-);
-
-
-// IA
-const aiScannerBox = document.getElementById(
-  "ai-scanner-box"
-);
-
-const aiImageInput = document.getElementById(
-  "ai-image-input"
-);
-
-const btnTriggerAI = document.getElementById(
-  "btn-trigger-ai"
-);
-
-const aiLoading = document.getElementById(
-  "ai-loading"
-);
-
-
-// ------------------------------------------------------------
-// FUNCIONES GENERALES
-// ------------------------------------------------------------
-
-function escapeHTML(value) {
-
-  if (value === null || value === undefined) {
-    return "";
-  }
-
-  return String(value)
+function escaparHTML(valor) {
+  return String(valor ?? "")
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")
@@ -262,9 +202,8 @@ function escapeHTML(value) {
 }
 
 
-function normalizarTexto(value) {
-
-  return String(value ?? "")
+function normalizarTexto(valor) {
+  return String(valor ?? "")
     .trim()
     .toLowerCase()
     .normalize("NFD")
@@ -272,299 +211,322 @@ function normalizarTexto(value) {
 }
 
 
-function normalizarArray(value) {
+function normalizarTipo(valor) {
+  return normalizarTexto(valor).includes("quim")
+    ? "quimico"
+    : "bio";
+}
 
-  if (Array.isArray(value)) {
 
-    return value
-      .map(item => String(item ?? "").trim())
-      .filter(Boolean);
-
+function convertirArray(valor) {
+  if (Array.isArray(valor)) {
+    return valor.map(v => String(v ?? "").trim()).filter(Boolean);
   }
 
-  if (value === null || value === undefined) {
+  if (valor === null || valor === undefined || valor === "") {
     return [];
   }
 
-  if (typeof value === "string") {
-
-    return value
-      .split(",")
-      .map(item => item.trim())
-      .filter(Boolean);
-
-  }
-
-  return [String(value).trim()].filter(Boolean);
+  return String(valor)
+    .split(",")
+    .map(v => v.trim())
+    .filter(Boolean);
 }
 
 
-function normalizarTipoRegistro(value) {
-
-  const tipo = normalizarTexto(value);
-
-  if (
-    tipo.includes("quim") ||
-    tipo.includes("pestic") ||
-    tipo.includes("fitosanit")
-  ) {
-    return "quimico";
-  }
-
-  return "bio";
-}
-
-
-function normalizarUnidad(value) {
-
-  const unidad = normalizarTexto(value);
-
-  if (unidad === "g" || unidad === "gr" || unidad === "gramos") {
-    return "g";
-  }
-
-  if (
-    unidad === "ml" ||
-    unidad === "mililitros" ||
-    unidad === "mililitro"
-  ) {
-    return "mL";
-  }
-
-  if (
-    unidad === "cc" ||
-    unidad === "cm3" ||
-    unidad === "cm³"
-  ) {
-    return "cc";
-  }
-
-  return "g";
-}
-
-
-function parseNumero(value) {
-
-  if (
-    value === null ||
-    value === undefined ||
-    value === ""
-  ) {
+function obtenerNumero(valor) {
+  if (valor === null || valor === undefined || String(valor).trim() === "") {
     return null;
   }
 
-  const texto = String(value)
-    .trim()
-    .replace(",", ".");
+  const numero = Number(String(valor).trim().replace(",", "."));
 
-  const numero = Number(texto);
-
-  return Number.isFinite(numero)
-    ? numero
-    : null;
+  return Number.isFinite(numero) ? numero : null;
 }
 
 
 function formatearNumero(numero) {
-
-  if (
-    numero === null ||
-    numero === undefined ||
-    !Number.isFinite(Number(numero))
-  ) {
-    return "";
+  if (numero === null || numero === undefined || !Number.isFinite(Number(numero))) {
+    return "—";
   }
 
-  const n = Number(numero);
-
-  if (Math.abs(n) >= 100) {
-    return n.toFixed(1).replace(/\.0+$/, "");
-  }
-
-  if (Math.abs(n) >= 10) {
-    return n.toFixed(2).replace(/0+$/, "").replace(/\.$/, "");
-  }
-
-  return n.toFixed(4).replace(/0+$/, "").replace(/\.$/, "");
+  return Number(numero).toLocaleString("es-CL", {
+    maximumFractionDigits: 4
+  });
 }
 
 
-function obtenerUnidadSeleccionada() {
-
+function obtenerUnidad() {
   const seleccionado = document.querySelector(
     'input[name="dose-unit"]:checked'
   );
 
-  if (!seleccionado) {
-    return "g";
-  }
+  if (!seleccionado) return "cc";
 
-  return normalizarUnidad(seleccionado.value);
+  const unidad = normalizarTexto(seleccionado.value);
+
+  if (unidad === "ml") return "mL";
+  if (unidad === "g" || unidad === "gramos") return "g";
+
+  return "cc";
 }
 
 
-function establecerUnidad(unidad) {
-
-  const unidadNormalizada = normalizarUnidad(unidad);
+function seleccionarUnidad(unidad) {
+  const normalizada = normalizarTexto(unidad || "cc");
 
   doseUnitRadios.forEach(radio => {
-
     radio.checked =
-      normalizarUnidad(radio.value) === unidadNormalizada;
-
+      normalizarTexto(radio.value) === normalizada;
   });
 }
 
 
-// ------------------------------------------------------------
-// PLAGAS
-// ------------------------------------------------------------
+function obtenerMensajeError(error) {
+  const codigo = error?.code || "";
 
-function obtenerPlagasFormulario() {
+  if (codigo.includes("permission-denied")) {
+    return "Firebase rechazó la operación por permisos. Revisa las reglas de Firestore.";
+  }
 
-  return [
-    recipePlaga1?.value?.trim() || "",
-    recipePlaga2?.value?.trim() || "",
-    recipePlaga3?.value?.trim() || "",
-    recipePlaga4?.value?.trim() || ""
-  ].filter(Boolean);
+  if (codigo.includes("auth/invalid-credential")) {
+    return "Correo o contraseña incorrectos.";
+  }
+
+  if (codigo.includes("auth/too-many-requests")) {
+    return "Demasiados intentos. Espera un momento antes de volver a intentarlo.";
+  }
+
+  if (codigo.includes("auth/network-request-failed")) {
+    return "No se pudo conectar con Firebase. Revisa Internet.";
+  }
+
+  return error?.message || "Error desconocido.";
 }
 
 
-function cargarPlagasFormulario(plagas) {
+// =========================================================
+// 5. FUNCIONES Y PLAGAS
+// =========================================================
 
-  const lista = normalizarArray(plagas);
-
-  if (recipePlaga1) {
-    recipePlaga1.value = lista[0] || "";
-  }
-
-  if (recipePlaga2) {
-    recipePlaga2.value = lista[1] || "";
-  }
-
-  if (recipePlaga3) {
-    recipePlaga3.value = lista[2] || "";
-  }
-
-  if (recipePlaga4) {
-    recipePlaga4.value = lista[3] || "";
-  }
-}
-
-
-// ------------------------------------------------------------
-// FUNCIONES
-// ------------------------------------------------------------
-
-function obtenerFuncionesFormulario() {
-
+function obtenerFunciones() {
   return Array.from(functionCheckboxes)
-    .filter(check => check.checked)
-    .map(check => check.value);
+    .filter(input => input.checked)
+    .map(input => input.value);
 }
 
 
-function cargarFuncionesFormulario(funciones) {
+function cargarFunciones(funciones) {
+  const lista = convertirArray(funciones).map(normalizarTexto);
 
-  const lista = normalizarArray(funciones)
-    .map(normalizarTexto);
-
-  functionCheckboxes.forEach(check => {
-
-    check.checked = lista.includes(
-      normalizarTexto(check.value)
-    );
-
+  functionCheckboxes.forEach(input => {
+    input.checked = lista.includes(normalizarTexto(input.value));
   });
 }
 
 
-// ------------------------------------------------------------
-// MODO DE ACCIÓN
-// ------------------------------------------------------------
-
-function obtenerModoAccionFormulario() {
-
-  const seleccionado = document.querySelector(
-    'input[name="modo_accion"]:checked'
-  );
-
-  return seleccionado
-    ? seleccionado.value
-    : "";
+function obtenerPlagas() {
+  return plagaInputs
+    .map(input => input?.value?.trim() || "")
+    .filter(Boolean);
 }
 
 
-function cargarModoAccionFormulario(modo) {
+function cargarPlagas(plagas) {
+  const lista = convertirArray(plagas);
 
-  const lista = normalizarArray(modo)
-    .map(normalizarTexto);
-
-  modoAccionRadios.forEach(radio => {
-
-    radio.checked = lista.includes(
-      normalizarTexto(radio.value)
-    );
-
+  plagaInputs.forEach((input, indice) => {
+    if (input) input.value = lista[indice] || "";
   });
 }
 
 
-// ------------------------------------------------------------
-// DOSIS
-// ------------------------------------------------------------
+function obtenerModosAccion() {
+  return Array.from(modoAccionCheckboxes)
+    .filter(input => input.checked)
+    .map(input => input.value);
+}
 
-function obtenerDosisActual() {
 
-  const low = parseNumero(recipeDoseLow?.value);
-  const high = parseNumero(recipeDoseHigh?.value);
+function cargarModosAccion(modos) {
+  const lista = convertirArray(modos).map(normalizarTexto);
+
+  modoAccionCheckboxes.forEach(input => {
+    input.checked = lista.includes(normalizarTexto(input.value));
+  });
+}
+
+
+// =========================================================
+// 6. CAMBIO ENTRE BIO Y QUÍMICO
+// =========================================================
+
+function alternarCamposFormulario(tipo) {
+  const esBio = normalizarTipo(tipo) === "bio";
+
+  const bio = document.getElementById("section-form-bio");
+  const quimico = document.getElementById("section-form-quimico");
+
+  if (bio) bio.style.display = esBio ? "block" : "none";
+  if (quimico) quimico.style.display = esBio ? "none" : "block";
+}
+
+
+if (tipoRegistroSelect) {
+  tipoRegistroSelect.addEventListener("change", () => {
+    alternarCamposFormulario(tipoRegistroSelect.value);
+  });
+}
+
+
+function cambiarMundo(tipo) {
+  mundoActual = normalizarTipo(tipo);
+  filtroFuncionActual = "todos";
+
+  if (btnWorldBio) {
+    btnWorldBio.className =
+      mundoActual === "bio"
+        ? "btn-world active-bio"
+        : "btn-world";
+  }
+
+  if (btnWorldQui) {
+    btnWorldQui.className =
+      mundoActual === "quimico"
+        ? "btn-world active-qui"
+        : "btn-world";
+  }
+
+  if (statsTitle) {
+    statsTitle.textContent =
+      mundoActual === "bio"
+        ? "Métricas Mundo Bio"
+        : "Métricas Mundo Químico";
+  }
+
+  if (resultsTitle) {
+    resultsTitle.textContent =
+      mundoActual === "bio"
+        ? "Listado de Biopreparados"
+        : "Listado de Productos Químicos";
+  }
+
+  if (statConditionalCard) {
+    statConditionalCard.innerHTML =
+      mundoActual === "bio"
+        ? 'Eficacia Alta <span id="stat-alta">0</span>'
+        : 'Sistémicos <span id="stat-alta">0</span>';
+  }
+
+  filterButtons.forEach(button => {
+    const activo = button.dataset.funcion === "todos";
+    button.style.background = activo ? "#81c784" : "#f1f8e9";
+  });
+
+  if (tipoRegistroSelect && esAdmin && !recipeId?.value) {
+    tipoRegistroSelect.value = mundoActual;
+    alternarCamposFormulario(mundoActual);
+  }
+
+  calcularMetricasYRender();
+}
+
+
+if (btnWorldBio) {
+  btnWorldBio.addEventListener("click", () => cambiarMundo("bio"));
+}
+
+if (btnWorldQui) {
+  btnWorldQui.addEventListener("click", () => cambiarMundo("quimico"));
+}
+
+
+// =========================================================
+// 7. CALCULADORA DE DOSIFICACIÓN
+// =========================================================
+
+let dosisConfirmada = false;
+
+
+function obtenerDatosDosisFormulario() {
+  const tipo = doseTypeSelect?.value || "agua";
+  const unidad = obtenerUnidad();
+
+  if (tipo === "agua") {
+    const valor = obtenerNumero(doseValueInput?.value);
+
+    return {
+      tipo,
+      unidad,
+      minima: valor,
+      maxima: valor,
+      aguaPorHectarea: null,
+      baseAgua: 100
+    };
+  }
 
   return {
-    low,
-    high,
-    unit: obtenerUnidadSeleccionada(),
-    waterBase: 100
+    tipo,
+    unidad,
+    minima: obtenerNumero(doseLowInput?.value),
+    maxima: obtenerNumero(doseHighInput?.value),
+    aguaPorHectarea: obtenerNumero(doseHaWaterInput?.value),
+    baseAgua: 100
   };
 }
 
 
-function calcularDosisParaLitros(dosisBase, litros) {
-
-  if (
-    dosisBase === null ||
-    !Number.isFinite(Number(dosisBase))
-  ) {
-    return null;
+function obtenerDosisEquivalente(datos) {
+  if (datos.tipo === "agua") {
+    return {
+      minimaPorLitro: datos.minima / 100,
+      maximaPorLitro: datos.maxima / 100
+    };
   }
 
-  return Number(dosisBase) * (Number(litros) / 100);
+  return {
+    minimaPorLitro: datos.minima / datos.aguaPorHectarea,
+    maximaPorLitro: datos.maxima / datos.aguaPorHectarea
+  };
 }
 
 
-function calcularTablaDosis(low, high, unit) {
+function validarDatosDosis(datos) {
+  if (datos.minima === null || datos.minima <= 0) {
+    return "Ingresa una dosis válida mayor que cero.";
+  }
 
+  if (datos.maxima === null || datos.maxima <= 0) {
+    return "Ingresa una dosis máxima válida.";
+  }
+
+  if (datos.maxima < datos.minima) {
+    return "La dosis máxima no puede ser menor que la mínima.";
+  }
+
+  if (datos.tipo === "ha") {
+    if (
+      datos.aguaPorHectarea === null ||
+      datos.aguaPorHectarea <= 0
+    ) {
+      return "Ingresa el volumen de agua recomendado en litros por hectárea.";
+    }
+  }
+
+  return "";
+}
+
+
+function calcularTablaDosis(datos) {
+  const equivalente = obtenerDosisEquivalente(datos);
   const litros = [1, 15, 100, 160];
-
   const tabla = {};
 
-  litros.forEach(litrosCantidad => {
-
-    tabla[litrosCantidad] = {
-
-      baja: calcularDosisParaLitros(
-        low,
-        litrosCantidad
-      ),
-
-      alta: calcularDosisParaLitros(
-        high,
-        litrosCantidad
-      ),
-
-      unidad: unit
+  litros.forEach(cantidad => {
+    tabla[cantidad] = {
+      baja: equivalente.minimaPorLitro * cantidad,
+      alta: equivalente.maximaPorLitro * cantidad
     };
-
   });
 
   return tabla;
@@ -572,3176 +534,986 @@ function calcularTablaDosis(low, high, unit) {
 
 
 function actualizarTablaDosis() {
+  if (!doseTypeSelect || !doseTableWrapper) return;
 
-  if (!recipeDoseLow || !recipeDoseHigh) {
-    return null;
+  const tipo = doseTypeSelect.value;
+
+  if (doseWaterFields) {
+    doseWaterFields.style.display =
+      tipo === "agua" ? "block" : "none";
   }
 
-  const low = parseNumero(recipeDoseLow.value);
-  const high = parseNumero(recipeDoseHigh.value);
-  const unit = obtenerUnidadSeleccionada();
-
-  // Sin dosis
-  if (low === null && high === null) {
-
-    if (doseTableWrapper) {
-      doseTableWrapper.style.display = "none";
-    }
-
-    if (doseConfirmBox) {
-      doseConfirmBox.style.display = "none";
-    }
-
-    if (doseValidationMessage) {
-      doseValidationMessage.textContent = "";
-    }
-
-    return null;
+  if (doseHaFields) {
+    doseHaFields.style.display =
+      tipo === "ha" ? "block" : "none";
   }
 
+  const datos = obtenerDatosDosisFormulario();
 
-  // Falta una dosis
-  if (low === null || high === null) {
+  const hayValores =
+    tipo === "agua"
+      ? doseValueInput?.value !== ""
+      : doseLowInput?.value !== "" ||
+        doseHighInput?.value !== "" ||
+        doseHaWaterInput?.value !== "";
 
-    if (doseTableWrapper) {
-      doseTableWrapper.style.display = "none";
-    }
+  if (!hayValores) {
+    doseTableWrapper.style.display = "none";
+    return;
+  }
+
+  const error = validarDatosDosis(datos);
+
+  if (error) {
+    doseTableWrapper.style.display = "none";
 
     if (doseValidationMessage) {
-
-      doseValidationMessage.textContent =
-        "Debes ingresar dosis mínima y dosis máxima.";
-
+      doseValidationMessage.textContent = error;
       doseValidationMessage.style.color = "#b42318";
     }
 
     dosisConfirmada = false;
 
-    return null;
+    if (doseConfirmStatus) doseConfirmStatus.textContent = "";
+
+    return;
   }
 
-
-  // Valores negativos o cero
-  if (low < 0 || high < 0) {
-
-    if (doseValidationMessage) {
-
-      doseValidationMessage.textContent =
-        "Las dosis no pueden ser negativas.";
-
-      doseValidationMessage.style.color = "#b42318";
-    }
-
-    dosisConfirmada = false;
-
-    return null;
-  }
-
-
-  // Máxima menor que mínima
-  if (high < low) {
-
-    if (doseTableWrapper) {
-      doseTableWrapper.style.display = "none";
-    }
-
-    if (doseValidationMessage) {
-
-      doseValidationMessage.textContent =
-        "La dosis máxima no puede ser menor que la dosis mínima.";
-
-      doseValidationMessage.style.color = "#b42318";
-    }
-
-    dosisConfirmada = false;
-
-    return null;
-  }
-
-
-  const tabla = calcularTablaDosis(
-    low,
-    high,
-    unit
-  );
-
-
-  // Mostrar tabla
-  if (doseTableWrapper) {
-    doseTableWrapper.style.display = "block";
-  }
-
+  const tabla = calcularTablaDosis(datos);
+  doseTableWrapper.style.display = "block";
 
   Object.keys(tabla).forEach(litros => {
+    const celdas = doseCells[litros];
 
-    const celda = doseCells[litros];
-
-    if (!celda) {
-      return;
+    if (celdas?.low) {
+      celdas.low.textContent =
+        `${formatearNumero(tabla[litros].baja)} ${datos.unidad}`;
     }
 
-    if (celda.low) {
-
-      celda.low.textContent =
-        `${formatearNumero(tabla[litros].baja)} ${unit}`;
+    if (celdas?.high) {
+      celdas.high.textContent =
+        `${formatearNumero(tabla[litros].alta)} ${datos.unidad}`;
     }
-
-    if (celda.high) {
-
-      celda.high.textContent =
-        `${formatearNumero(tabla[litros].alta)} ${unit}`;
-    }
-
   });
 
-
   if (doseValidationMessage) {
-
     doseValidationMessage.textContent =
-      "Dosis calculadas correctamente.";
+      tipo === "ha"
+        ? `Equivalencia calculada a partir de ${formatearNumero(datos.aguaPorHectarea)} L de agua/ha.`
+        : "Equivalencias calculadas a partir de la dosis por 100 L de agua.";
 
     doseValidationMessage.style.color = "#18794e";
   }
 
-
-  // Confirmación
-  if (!dosisConfirmada && doseConfirmBox) {
-
-    doseConfirmBox.style.display = "block";
-
-    if (doseConfirmationSummary) {
-
-      doseConfirmationSummary.textContent =
-        `Has ingresado ${formatearNumero(low)}–${formatearNumero(high)} ${unit} por 100 L. Revisa la tabla antes de confirmar.`;
-
-    }
-
+  if (doseConfirmationSummary) {
+    doseConfirmationSummary.textContent =
+      tipo === "ha"
+        ? `Dosis original: ${formatearNumero(datos.minima)}–${formatearNumero(datos.maxima)} ${datos.unidad}/ha; volumen de agua: ${formatearNumero(datos.aguaPorHectarea)} L/ha.`
+        : `Dosis original: ${formatearNumero(datos.minima)} ${datos.unidad}/100 L de agua.`;
   }
 
+  if (doseConfirmBox) {
+    doseConfirmBox.style.display =
+      dosisConfirmada ? "none" : "block";
+  }
 
-  if (dosisConfirmada && doseConfirmStatus) {
-
+  if (doseConfirmStatus) {
     doseConfirmStatus.textContent =
-      "✓ Dosis confirmada.";
-
-    doseConfirmStatus.style.color = "#18794e";
-  }
-
-
-  return tabla;
-}
-
-
-function obtenerDosisGuardada(item) {
-
-  let low = parseNumero(item?.dosis_baja);
-  let high = parseNumero(item?.dosis_alta);
-
-  let unit =
-    item?.unidad_dosis ||
-    item?.dosis_unidad ||
-    "g";
-
-
-  // Nuevo formato
-  if (low !== null && high !== null) {
-
-    return {
-      low,
-      high,
-      unit: normalizarUnidad(unit)
-    };
-
-  }
-
-
-  // Si dosis viene como objeto
-  if (
-    item?.dosis &&
-    typeof item.dosis === "object"
-  ) {
-
-    low =
-      parseNumero(
-        item.dosis.baja ??
-        item.dosis.low ??
-        item.dosis.minima
-      );
-
-    high =
-      parseNumero(
-        item.dosis.alta ??
-        item.dosis.high ??
-        item.dosis.maxima
-      );
-
-    unit =
-      item.dosis.unidad ??
-      item.dosis.unit ??
-      unit;
-
-    if (low !== null && high !== null) {
-
-      return {
-        low,
-        high,
-        unit: normalizarUnidad(unit)
-      };
-
-    }
-  }
-
-
-  // Dosis antigua como número
-  if (
-    typeof item?.dosis === "number"
-  ) {
-
-    return {
-      low: item.dosis,
-      high: item.dosis,
-      unit: normalizarUnidad(unit)
-    };
-
-  }
-
-
-  // Intento de interpretar texto antiguo
-  if (
-    typeof item?.dosis === "string" &&
-    item.dosis.trim()
-  ) {
-
-    const texto = item.dosis;
-
-    const coincidencia = texto.match(
-      /([\d.,]+)\s*(?:-|–|—|a)\s*([\d.,]+)\s*(g|gr|cc|ml|mL)?/i
-    );
-
-    if (coincidencia) {
-
-      const valorLow = parseNumero(
-        coincidencia[1]
-      );
-
-      const valorHigh = parseNumero(
-        coincidencia[2]
-      );
-
-      const valorUnit =
-        coincidencia[3] ||
-        unit;
-
-      if (
-        valorLow !== null &&
-        valorHigh !== null
-      ) {
-
-        return {
-          low: valorLow,
-          high: valorHigh,
-          unit: normalizarUnidad(valorUnit)
-        };
-
-      }
-    }
-  }
-
-
-  return {
-    low: null,
-    high: null,
-    unit: normalizarUnidad(unit)
-  };
-}
-
-
-function generarTextoDosis(low, high, unit) {
-
-  if (low === null || high === null) {
-    return "";
-  }
-
-  return (
-    `${formatearNumero(low)}–${formatearNumero(high)} ${unit}/100 L`
-  );
-}
-
-
-function generarTextoTablaDosis(low, high, unit) {
-
-  if (low === null || high === null) {
-    return "";
-  }
-
-  const tabla = calcularTablaDosis(
-    low,
-    high,
-    unit
-  );
-
-  return [
-    `1 L: ${formatearNumero(tabla[1].baja)}–${formatearNumero(tabla[1].alta)} ${unit}`,
-    `15 L: ${formatearNumero(tabla[15].baja)}–${formatearNumero(tabla[15].alta)} ${unit}`,
-    `100 L: ${formatearNumero(tabla[100].baja)}–${formatearNumero(tabla[100].alta)} ${unit}`,
-    `160 L: ${formatearNumero(tabla[160].baja)}–${formatearNumero(tabla[160].alta)} ${unit}`
-  ].join(" | ");
-}
-
-
-function validarDosisFormulario() {
-
-  const low = parseNumero(recipeDoseLow?.value);
-  const high = parseNumero(recipeDoseHigh?.value);
-
-  // No se ingresó dosis
-  if (low === null && high === null) {
-
-    return {
-      existe: false,
-      valida: true,
-      low: null,
-      high: null,
-      unit: obtenerUnidadSeleccionada(),
-      tabla: null
-    };
-
-  }
-
-
-  if (low === null || high === null) {
-
-    return {
-      existe: true,
-      valida: false,
-      mensaje:
-        "Debes completar la dosis mínima y máxima."
-    };
-
-  }
-
-
-  if (low < 0 || high < 0) {
-
-    return {
-      existe: true,
-      valida: false,
-      mensaje:
-        "Las dosis no pueden ser negativas."
-    };
-
-  }
-
-
-  if (high < low) {
-
-    return {
-      existe: true,
-      valida: false,
-      mensaje:
-        "La dosis máxima no puede ser menor que la mínima."
-    };
-
-  }
-
-
-  if (!dosisConfirmada) {
-
-    return {
-      existe: true,
-      valida: false,
-      mensaje:
-        "Debes revisar y confirmar la tabla de dosis antes de guardar."
-    };
-
-  }
-
-
-  const unit = obtenerUnidadSeleccionada();
-
-  return {
-    existe: true,
-    valida: true,
-    low,
-    high,
-    unit,
-    tabla: calcularTablaDosis(
-      low,
-      high,
-      unit
-    )
-  };
-}
-
-
-// ------------------------------------------------------------
-// CAMBIO DE CAMPOS SEGÚN TIPO
-// ------------------------------------------------------------
-
-function alternarCamposFormulario(tipo) {
-
-  const tipoNormalizado =
-    normalizarTipoRegistro(tipo);
-
-
-  document
-    .querySelectorAll(".bio-only")
-    .forEach(element => {
-
-      element.style.display =
-        tipoNormalizado === "bio"
-          ? ""
-          : "none";
-
-    });
-
-
-  document
-    .querySelectorAll(".chem-only")
-    .forEach(element => {
-
-      element.style.display =
-        tipoNormalizado === "quimico"
-          ? ""
-          : "none";
-
-    });
-
-
-  if (aiScannerBox) {
-
-    aiScannerBox.style.display =
-      tipoNormalizado === "quimico"
-        ? ""
-        : aiScannerBox.style.display;
-
+      dosisConfirmada
+        ? "✓ Dosificación confirmada."
+        : "Revisa la tabla y confirma antes de guardar.";
+
+    doseConfirmStatus.style.color =
+      dosisConfirmada ? "#18794e" : "#b54708";
   }
 }
 
 
-// ------------------------------------------------------------
-// MUNDO
-// ------------------------------------------------------------
+[
+  doseTypeSelect,
+  doseValueInput,
+  doseLowInput,
+  doseHighInput,
+  doseHaWaterInput
+].forEach(input => {
+  if (!input) return;
 
-function cambiarMundo(mundo) {
-
-  mundoActual =
-    normalizarTipoRegistro(mundo);
-
-
-  if (btnWorldBio) {
-
-    btnWorldBio.classList.toggle(
-      "active",
-      mundoActual === "bio"
-    );
-
-  }
-
-
-  if (btnWorldQui) {
-
-    btnWorldQui.classList.toggle(
-      "active",
-      mundoActual === "quimico"
-    );
-
-  }
-
-
-  if (statsTitle) {
-
-    statsTitle.textContent =
-      mundoActual === "bio"
-        ? "Productos biológicos"
-        : "Productos químicos";
-
-  }
-
-
-  if (resultsTitle) {
-
-    resultsTitle.textContent =
-      mundoActual === "bio"
-        ? "Productos biológicos"
-        : "Productos químicos";
-
-  }
-
-
-  if (tipoRegistroSelect) {
-
-    tipoRegistroSelect.value =
-      mundoActual;
-
-  }
-
-
-  alternarCamposFormulario(
-    mundoActual
-  );
-
-  calcularMetricasYRender();
-}
-
-
-// ------------------------------------------------------------
-// BÚSQUEDA
-// ------------------------------------------------------------
-
-function establecerBusqueda(valor) {
-
-  textoBusquedaActual =
-    normalizarTexto(valor);
-
-  calcularMetricasYRender();
-}
-
-
-// ------------------------------------------------------------
-// FILTROS DE FUNCIÓN
-// ------------------------------------------------------------
-
-function establecerFiltroFuncion(funcion) {
-
-  filtroFuncionActual =
-    normalizarTexto(funcion || "todos");
-
-  document
-    .querySelectorAll(".btn-filter")
-    .forEach(button => {
-
-      const filtro =
-        normalizarTexto(
-          button.dataset.funcion || "todos"
-        );
-
-      button.classList.toggle(
-        "active",
-        filtro === filtroFuncionActual
-      );
-
-    });
-
-  calcularMetricasYRender();
-}
-
-
-// ------------------------------------------------------------
-// FILTRADO DE DATOS
-// ------------------------------------------------------------
-
-function obtenerDatosFiltrados() {
-
-  let datos = todosLosDatos.filter(item => {
-
-    return (
-      normalizarTipoRegistro(
-        item.tipo_registro
-      ) === mundoActual
-    );
-
+  input.addEventListener("input", () => {
+    dosisConfirmada = false;
+    actualizarTablaDosis();
   });
 
-
-  // FILTRO FUNCIÓN
-  if (
-    filtroFuncionActual &&
-    filtroFuncionActual !== "todos"
-  ) {
-
-    datos = datos.filter(item => {
-
-      const funciones =
-        normalizarArray(item.funcion)
-          .map(normalizarTexto);
-
-      return funciones.includes(
-        filtroFuncionActual
-      );
-
-    });
-
-  }
-
-
-  // BÚSQUEDA
-  if (textoBusquedaActual) {
-
-    datos = datos.filter(item => {
-
-      const funciones =
-        normalizarArray(item.funcion)
-          .join(" ");
-
-      const plagas =
-        normalizarArray(item.plagas_objetivo)
-          .join(" ");
-
-      const textoCompleto = [
-
-        item.nombre,
-        item.fabricante,
-        item.registro,
-        item.formulacion,
-        item.ingrediente_activo,
-        item.grupo_quimico,
-        item.concentracion,
-        item.modo_accion,
-        item.efectividad,
-        item.contraindicaciones,
-        item.contraindicacion,
-        item.ingredientes,
-        item.preparacion,
-        item.carencia,
-        item.reentrada,
-        funciones,
-        plagas
-
-      ]
-        .filter(Boolean)
-        .join(" ");
-
-
-      return normalizarTexto(
-        textoCompleto
-      ).includes(
-        textoBusquedaActual
-      );
-
-    });
-
-  }
-
-
-  return datos;
-}
-
-
-// ------------------------------------------------------------
-// MÉTRICAS
-// ------------------------------------------------------------
-
-function calcularMetricasYRender() {
-
-  const datosMundo =
-    todosLosDatos.filter(item => {
-
-      return (
-        normalizarTipoRegistro(
-          item.tipo_registro
-        ) === mundoActual
-      );
-
-    });
-
-
-  const datosFiltrados =
-    obtenerDatosFiltrados();
-
-
-  // TOTAL
-  if (statTotal) {
-
-    statTotal.textContent =
-      datosMundo.length;
-
-  }
-
-
-  // MÉTRICA CONDICIONAL
-  let cantidadCondicional = 0;
-  let etiquetaCondicional = "";
-
-
-  if (mundoActual === "bio") {
-
-    etiquetaCondicional =
-      "Alta efectividad";
-
-    cantidadCondicional =
-      datosMundo.filter(item => {
-
-        const efectividad =
-          normalizarTexto(
-            item.efectividad
-          );
-
-        return (
-          efectividad.includes("alta") ||
-          efectividad.includes("muy alta")
-        );
-
-      }).length;
-
-  } else {
-
-    etiquetaCondicional =
-      "Acción sistémica";
-
-    cantidadCondicional =
-      datosMundo.filter(item => {
-
-        const modos =
-          normalizarArray(
-            item.modo_accion
-          )
-            .map(normalizarTexto);
-
-        return modos.includes("sistemico");
-
-      }).length;
-
-  }
-
-
-  if (statConditionalCard) {
-
-    statConditionalCard.innerHTML =
-      `${escapeHTML(etiquetaCondicional)}
-       <span id="stat-alta">${cantidadCondicional}</span>`;
-
-  }
-
-
-  if (statAlta) {
-
-    statAlta.textContent =
-      cantidadCondicional;
-
-  }
-
-
-  renderizarRecetas(
-    datosFiltrados
-  );
-}
-
-
-// ------------------------------------------------------------
-// FORMATEAR LISTAS
-// ------------------------------------------------------------
-
-function renderizarLista(items) {
-
-  const lista =
-    normalizarArray(items);
-
-  if (!lista.length) {
-    return "No especificado";
-  }
-
-  return lista
-    .map(item => escapeHTML(item))
-    .join(", ");
-}
-
-
-// ------------------------------------------------------------
-// DOSIS EN TARJETA
-// ------------------------------------------------------------
-
-function renderizarDosis(item) {
-
-  const dosis =
-    obtenerDosisGuardada(item);
-
-
-  if (
-    dosis.low === null ||
-    dosis.high === null
-  ) {
-
-    // Compatibilidad con registros antiguos
-    if (
-      item.modo_aplicacion &&
-      String(item.modo_aplicacion).trim()
-    ) {
-
-      return `
-        <div class="recipe-dose">
-          <strong>Dosis:</strong>
-          ${escapeHTML(item.modo_aplicacion)}
-        </div>
-      `;
-
+  input.addEventListener("change", () => {
+    dosisConfirmada = false;
+    actualizarTablaDosis();
+  });
+});
+
+
+doseUnitRadios.forEach(input => {
+  input.addEventListener("change", () => {
+    dosisConfirmada = false;
+    actualizarTablaDosis();
+  });
+});
+
+
+if (btnConfirmDoses) {
+  btnConfirmDoses.addEventListener("click", () => {
+    const datos = obtenerDatosDosisFormulario();
+    const error = validarDatosDosis(datos);
+
+    if (error) {
+      alert(error);
+      return;
     }
 
+    dosisConfirmada = true;
+    actualizarTablaDosis();
+  });
+}
 
-    if (
-      item.dosis &&
-      typeof item.dosis === "string"
-    ) {
 
-      return `
-        <div class="recipe-dose">
-          <strong>Dosis:</strong>
-          ${escapeHTML(item.dosis)}
-        </div>
-      `;
+if (btnCancelDoses) {
+  btnCancelDoses.addEventListener("click", () => {
+    dosisConfirmada = false;
 
+    if (doseConfirmBox) doseConfirmBox.style.display = "none";
+
+    if (doseConfirmStatus) {
+      doseConfirmStatus.textContent =
+        "Confirmación pendiente. Debes confirmar la dosis antes de guardar.";
+      doseConfirmStatus.style.color = "#b54708";
     }
+  });
+}
 
 
-    return "";
+// =========================================================
+// 8. CONVERTIR DOSIS ANTIGUAS
+// =========================================================
+
+function obtenerDosisGuardada(item) {
+  if (
+    item.dosis_minima !== undefined &&
+    item.dosis_maxima !== undefined &&
+    item.tipo_dosificacion
+  ) {
+    return {
+      tipo: item.tipo_dosificacion,
+      unidad: item.unidad_dosis || "cc",
+      minima: Number(item.dosis_minima),
+      maxima: Number(item.dosis_maxima),
+      aguaPorHectarea:
+        item.volumen_agua_ha == null
+          ? null
+          : Number(item.volumen_agua_ha)
+    };
   }
 
+  // Compatibilidad con los datos anteriores.
+  // Los registros antiguos guardaban el texto en modo_aplicacion.
+  return null;
+}
 
-  const tabla =
-    calcularTablaDosis(
-      dosis.low,
-      dosis.high,
-      dosis.unit
-    );
 
+function renderizarDosisTarjeta(item) {
+  const dosis = obtenerDosisGuardada(item);
+
+  if (!dosis) {
+    const antigua =
+      item.modo_aplicacion ||
+      item.dosis ||
+      "";
+
+    return antigua
+      ? `<p><strong>Dosis original:</strong> ${escaparHTML(antigua)}</p>`
+      : "<p><strong>Dosis:</strong> No especificada</p>";
+  }
+
+  const agua = dosis.tipo === "ha"
+    ? dosis.aguaPorHectarea
+    : 100;
+
+  if (!agua || agua <= 0) {
+    return `<p><strong>Dosis original:</strong> ${escaparHTML(item.modo_aplicacion || "")}</p>`;
+  }
+
+  const equivalencia = {
+    minima: dosis.minima / agua,
+    maxima: dosis.maxima / agua
+  };
+
+  const tabla = [1, 15, 100, 160].map(litros => ({
+    litros,
+    baja: equivalencia.minima * litros,
+    alta: equivalencia.maxima * litros
+  }));
 
   return `
-    <div class="recipe-dose">
+    <div class="dose-card">
+      <p>
+        <strong>Dosis original:</strong>
+        ${formatearNumero(dosis.minima)}–${formatearNumero(dosis.maxima)}
+        ${escaparHTML(dosis.unidad)}${dosis.tipo === "ha" ? "/ha" : "/100 L"}
+      </p>
 
-      <div>
-        <strong>Dosis por 100 L:</strong>
-        ${escapeHTML(
-          generarDosisTexto(
-            dosis.low,
-            dosis.high,
-            dosis.unit
-          )
-        )}
+      ${dosis.tipo === "ha"
+        ? `<p><strong>Volumen de agua:</strong> ${formatearNumero(dosis.aguaPorHectarea)} L/ha</p>`
+        : ""
+      }
+
+      <div class="tabla-dosis-container">
+        <table class="tabla-dosis">
+          <thead>
+            <tr>
+              <th>Agua</th>
+              <th>Dosis mínima</th>
+              <th>Dosis máxima</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${tabla.map(fila => `
+              <tr>
+                <td>${fila.litros} L</td>
+                <td>${formatearNumero(fila.baja)} ${escaparHTML(dosis.unidad)}</td>
+                <td>${formatearNumero(fila.alta)} ${escaparHTML(dosis.unidad)}</td>
+              </tr>
+            `).join("")}
+          </tbody>
+        </table>
       </div>
-
-      <div class="dose-mini-table">
-
-        <div>
-          <strong>1 L:</strong>
-          ${formatearNumero(tabla[1].baja)}
-          –
-          ${formatearNumero(tabla[1].alta)}
-          ${escapeHTML(dosis.unit)}
-        </div>
-
-        <div>
-          <strong>15 L:</strong>
-          ${formatearNumero(tabla[15].baja)}
-          –
-          ${formatearNumero(tabla[15].alta)}
-          ${escapeHTML(dosis.unit)}
-        </div>
-
-        <div>
-          <strong>100 L:</strong>
-          ${formatearNumero(tabla[100].baja)}
-          –
-          ${formatearNumero(tabla[100].alta)}
-          ${escapeHTML(dosis.unit)}
-        </div>
-
-        <div>
-          <strong>160 L:</strong>
-          ${formatearNumero(tabla[160].baja)}
-          –
-          ${formatearNumero(tabla[160].alta)}
-          ${escapeHTML(dosis.unit)}
-        </div>
-
-      </div>
-
     </div>
   `;
 }
 
 
-// Alias para evitar problemas de compatibilidad
-function generarDosisTexto(low, high, unit) {
-
-  return generarTextoDosis(
-    low,
-    high,
-    unit
-  );
-}
-
-
-// ------------------------------------------------------------
-// TARJETAS
-// ------------------------------------------------------------
-
-function renderizarRecetas(datos) {
-
-  if (!recipesContainer) {
-    return;
-  }
-
-
-  if (!datos.length) {
-
-    recipesContainer.innerHTML = `
-      <div class="no-results">
-        <h3>No se encontraron productos</h3>
-        <p>
-          No hay productos que coincidan con los
-          filtros o búsqueda actual.
-        </p>
-      </div>
-    `;
-
-    return;
-  }
-
-
-  recipesContainer.innerHTML =
-    datos.map(renderizarTarjeta).join("");
-
-
-  // BOTONES DETALLES
-  recipesContainer
-    .querySelectorAll(".btn-toggle-details")
-    .forEach(button => {
-
-      button.addEventListener(
-        "click",
-        () => {
-
-          const id =
-            button.dataset.id;
-
-          const details =
-            recipesContainer.querySelector(
-              `.recipe-details[data-id="${CSS.escape(id)}"]`
-            );
-
-          if (!details) {
-            return;
-          }
-
-          const visible =
-            details.style.display === "block";
-
-          details.style.display =
-            visible
-              ? "none"
-              : "block";
-
-          button.textContent =
-            visible
-              ? "Ver detalles"
-              : "Ocultar detalles";
-
-        }
-      );
-
-    });
-
-
-  // EDITAR
-  recipesContainer
-    .querySelectorAll(".btn-edit-recipe")
-    .forEach(button => {
-
-      button.addEventListener(
-        "click",
-        () => {
-
-          const id =
-            button.dataset.id;
-
-          const item =
-            todosLosDatos.find(
-              dato => dato.id === id
-            );
-
-          if (item) {
-            cargarItemEnFormulario(item);
-          }
-
-        }
-      );
-
-    });
-
-
-  // ELIMINAR
-  recipesContainer
-    .querySelectorAll(".btn-delete-recipe")
-    .forEach(button => {
-
-      button.addEventListener(
-        "click",
-        async () => {
-
-          const id =
-            button.dataset.id;
-
-          const item =
-            todosLosDatos.find(
-              dato => dato.id === id
-            );
-
-          if (!item) {
-            return;
-          }
-
-
-          const confirmar =
-            confirm(
-              `¿Eliminar el producto "${item.nombre || "sin nombre"}"?`
-            );
-
-
-          if (!confirmar) {
-            return;
-          }
-
-
-          if (!esAdmin) {
-
-            alert(
-              "Debes iniciar sesión como administrador."
-            );
-
-            return;
-          }
-
-
-          try {
-
-            await deleteDoc(
-              doc(db, "recetas", id)
-            );
-
-            alert(
-              "Producto eliminado correctamente."
-            );
-
-          } catch (error) {
-
-            console.error(
-              "Error eliminando producto:",
-              error
-            );
-
-            alert(
-              "No se pudo eliminar el producto:\n" +
-              obtenerMensajeFirebase(error)
-            );
-
-          }
-
-        }
-      );
-
-    });
-
-}
-
-
-// ------------------------------------------------------------
-// TARJETA INDIVIDUAL
-// ------------------------------------------------------------
-
-function renderizarTarjeta(item) {
-
-  const tipo =
-    normalizarTipoRegistro(
-      item.tipo_registro
-    );
-
-
-  const funciones =
-    normalizarArray(item.funcion);
-
-  const plagas =
-    normalizarArray(item.plagas_objetivo);
-
-
-  const nombre =
-    item.nombre ||
-    "Producto sin nombre";
-
-
-  const fabricante =
-    item.fabricante ||
-    "";
-
-
-  const ingredientes =
-    item.ingredientes ||
-    item.ingrediente_activo ||
-    "";
-
-
-  const detalleId =
-    `details-${item.id}`;
-
-
-  const funcionesHTML =
-    funciones.length
-      ? funciones
-          .map(
-            funcion => `
-              <span class="badge">
-                ${escapeHTML(funcion)}
-              </span>
-            `
-          )
-          .join("")
-      : "<span>No especificado</span>";
-
-
-  let contenidoBio = "";
-
-
-  if (tipo === "bio") {
-
-    contenidoBio = `
-
-      ${
-        item.efectividad
-          ? `
-            <div>
-              <strong>Efectividad:</strong>
-              ${escapeHTML(item.efectividad)}
-            </div>
-          `
-          : ""
-      }
-
-      ${
-        ingredientes
-          ? `
-            <div>
-              <strong>Ingredientes:</strong>
-              ${escapeHTML(ingredientes)}
-            </div>
-          `
-          : ""
-      }
-
-      ${
-        item.preparacion
-          ? `
-            <div>
-              <strong>Preparación:</strong>
-              ${escapeHTML(item.preparacion)}
-            </div>
-          `
-          : ""
-      }
-
-      ${
-        item.contraindicacion ||
-        item.contraindicaciones
-          ? `
-            <div>
-              <strong>Contraindicaciones:</strong>
-              ${escapeHTML(
-                item.contraindicacion ||
-                item.contraindicaciones
-              )}
-            </div>
-          `
-          : ""
-      }
-
-    `;
-
-  } else {
-
-    contenidoBio = `
-
-      ${
-        item.ingrediente_activo
-          ? `
-            <div>
-              <strong>Ingrediente activo:</strong>
-              ${escapeHTML(item.ingrediente_activo)}
-            </div>
-          `
-          : ""
-      }
-
-      ${
-        item.concentracion
-          ? `
-            <div>
-              <strong>Concentración:</strong>
-              ${escapeHTML(item.concentracion)}
-            </div>
-          `
-          : ""
-      }
-
-      ${
-        item.grupo_quimico
-          ? `
-            <div>
-              <strong>Grupo químico:</strong>
-              ${escapeHTML(item.grupo_quimico)}
-            </div>
-          `
-          : ""
-      }
-
-      ${
-        item.modo_accion
-          ? `
-            <div>
-              <strong>Modo de acción:</strong>
-              ${renderizarLista(item.modo_accion)}
-            </div>
-          `
-          : ""
-      }
-
-      ${
-        item.carencia
-          ? `
-            <div>
-              <strong>Carencia:</strong>
-              ${escapeHTML(item.carencia)}
-            </div>
-          `
-          : ""
-      }
-
-      ${
-        item.reentrada
-          ? `
-            <div>
-              <strong>Reentrada:</strong>
-              ${escapeHTML(item.reentrada)}
-            </div>
-          `
-          : ""
-      }
-
-    `;
-  }
-
-
-  const plagasHTML =
-    plagas.length
-      ? plagas
-          .map(
-            plaga => `
-              <span class="badge badge-plaga">
-                ${escapeHTML(plaga)}
-              </span>
-            `
-          )
-          .join("")
-      : "<span>No especificadas</span>";
-
-
-  const adminButtons =
-    esAdmin
-      ? `
-        <div class="recipe-admin-actions">
-
-          <button
-            type="button"
-            class="btn-edit-recipe"
-            data-id="${escapeHTML(item.id)}"
-          >
-            Editar
-          </button>
-
-          <button
-            type="button"
-            class="btn-delete-recipe"
-            data-id="${escapeHTML(item.id)}"
-          >
-            Eliminar
-          </button>
-
-        </div>
-      `
-      : "";
-
-
-  return `
-
-    <article
-      class="recipe-card"
-      data-id="${escapeHTML(item.id)}"
-    >
-
-      <div class="recipe-header">
-
-        <div>
-
-          <div class="recipe-type">
-            ${tipo === "bio" ? "BIO" : "QUÍMICO"}
-          </div>
-
-          <h3 class="recipe-title">
-            ${escapeHTML(nombre)}
-          </h3>
-
-          ${
-            fabricante
-              ? `
-                <div class="recipe-manufacturer">
-                  ${escapeHTML(fabricante)}
-                </div>
-              `
-              : ""
-          }
-
-        </div>
-
-      </div>
-
-
-      <div class="recipe-functions">
-
-        <strong>Función:</strong>
-
-        <div class="badges">
-          ${funcionesHTML}
-        </div>
-
-      </div>
-
-
-      <div class="recipe-pests">
-
-        <strong>Plagas objetivo:</strong>
-
-        <div class="badges">
-          ${plagasHTML}
-        </div>
-
-      </div>
-
-
-      ${renderizarDosis(item)}
-
-
-      <div
-        class="recipe-details"
-        data-id="${escapeHTML(item.id)}"
-        style="display:none;"
-      >
-
-        <div class="recipe-detail-grid">
-
-          ${
-            item.registro
-              ? `
-                <div>
-                  <strong>Registro:</strong>
-                  ${escapeHTML(item.registro)}
-                </div>
-              `
-              : ""
-          }
-
-          ${
-            item.formulacion
-              ? `
-                <div>
-                  <strong>Formulación:</strong>
-                  ${escapeHTML(item.formulacion)}
-                </div>
-              `
-              : ""
-          }
-
-          ${contenidoBio}
-
-        </div>
-
-      </div>
-
-
-      <div class="recipe-actions">
-
-        <button
-          type="button"
-          class="btn-toggle-details"
-          data-id="${escapeHTML(item.id)}"
-        >
-          Ver detalles
-        </button>
-
-        ${adminButtons}
-
-      </div>
-
-    </article>
-
-  `;
-}
-
-
-// ------------------------------------------------------------
-// CARGAR PRODUCTO EN FORMULARIO
-// ------------------------------------------------------------
+// =========================================================
+// 9. CAMBIAR FORMULARIO ENTRE ALTA Y EDICIÓN
+// =========================================================
 
 function cargarItemEnFormulario(item) {
-
   if (!esAdmin) {
-
-    alert(
-      "Debes iniciar sesión como administrador."
-    );
-
+    alert("Debes iniciar sesión como administrador.");
     return;
   }
 
+  recipeId.value = item.id || "";
+  tipoRegistroSelect.value = normalizarTipo(item.tipo_registro);
+  alternarCamposFormulario(tipoRegistroSelect.value);
 
-  if (!recipeForm) {
-    return;
+  recipeName.value = item.nombre || "";
+
+  if (recipeFabricante) {
+    recipeFabricante.value = item.fabricante || "";
   }
 
-
-  recipeId.value =
-    item.id || "";
-
-
-  const tipo =
-    normalizarTipoRegistro(
-      item.tipo_registro
-    );
-
-
-  mundoActual = tipo;
-
-
-  if (tipoRegistroSelect) {
-    tipoRegistroSelect.value = tipo;
+  if (recipeRegistro) {
+    recipeRegistro.value = item.registro || "";
   }
 
+  cargarFunciones(item.funcion);
+  cargarPlagas(item.plagas_objetivo);
 
-  if (recipeName) {
-    recipeName.value =
-      item.nombre || "";
-  }
-
-
-  cargarFuncionesFormulario(
-    item.funcion
-  );
-
-
-  cargarPlagasFormulario(
-    item.plagas_objetivo
-  );
-
-
-  // BIO
   if (recipeEfectividad) {
-
     recipeEfectividad.value =
-      item.efectividad || "";
-
+      item.efectividad || "En fase de evaluación";
   }
-
 
   if (recipeContra) {
-
     recipeContra.value =
-      item.contraindicacion ||
-      item.contraindicaciones ||
-      "";
-
+      item.contraindicacion || item.contraindicaciones || "";
   }
-
 
   if (recipeIngredients) {
-
-    recipeIngredients.value =
-      item.ingredientes ||
-      item.ingrediente_activo ||
-      "";
-
+    recipeIngredients.value = item.ingredientes || "";
   }
-
 
   if (recipePrep) {
-
-    recipePrep.value =
-      item.preparacion || "";
-
+    recipePrep.value = item.preparacion || "";
   }
 
-
-  // QUÍMICOS
   if (recipeActivo) {
-
-    recipeActivo.value =
-      item.ingrediente_activo || "";
-
+    recipeActivo.value = item.ingrediente_activo || "";
   }
-
 
   if (recipeConcentracion) {
-
-    recipeConcentracion.value =
-      item.concentracion || "";
-
+    recipeConcentracion.value = item.concentracion || "";
   }
-
 
   if (recipeCarencia) {
-
-    recipeCarencia.value =
-      item.carencia || "";
-
+    recipeCarencia.value = item.carencia || "";
   }
-
 
   if (recipeReentrada) {
-
-    recipeReentrada.value =
-      item.reentrada || "";
-
+    recipeReentrada.value = item.reentrada || "";
   }
 
+  cargarModosAccion(item.modo_accion);
 
-  cargarModoAccionFormulario(
-    item.modo_accion
-  );
+  const dosis = obtenerDosisGuardada(item);
 
-
-  // DOSIS
-  const dosis =
-    obtenerDosisGuardada(item);
-
-
-  if (recipeDoseWater) {
-    recipeDoseWater.value = 100;
+  if (doseTypeSelect) {
+    doseTypeSelect.value = dosis?.tipo || "agua";
   }
 
-
-  if (recipeDoseLow) {
-
-    recipeDoseLow.value =
-      dosis.low !== null
-        ? dosis.low
-        : "";
-
+  if (doseValueInput) {
+    doseValueInput.value =
+      dosis?.tipo === "agua" ? dosis.minima : "";
   }
 
-
-  if (recipeDoseHigh) {
-
-    recipeDoseHigh.value =
-      dosis.high !== null
-        ? dosis.high
-        : "";
-
+  if (doseLowInput) {
+    doseLowInput.value =
+      dosis?.tipo === "ha" ? dosis.minima : "";
   }
 
-
-  establecerUnidad(
-    dosis.unit
-  );
-
-
-  if (recipeApp) {
-
-    recipeApp.value =
-      item.modo_aplicacion || "";
-
+  if (doseHighInput) {
+    doseHighInput.value =
+      dosis?.tipo === "ha" ? dosis.maxima : "";
   }
 
-
-  if (
-    dosis.low !== null &&
-    dosis.high !== null
-  ) {
-
-    dosisConfirmada =
-      item.dosis_confirmada !== false;
-
-    actualizarTablaDosis();
-
-
-    if (doseConfirmBox) {
-
-      doseConfirmBox.style.display =
-        dosisConfirmada
-          ? "none"
-          : "block";
-
-    }
-
-
-    if (doseConfirmStatus) {
-
-      doseConfirmStatus.textContent =
-        dosisConfirmada
-          ? "✓ Dosis cargada y confirmada."
-          : "";
-
-      doseConfirmStatus.style.color =
-        "#18794e";
-
-    }
-
-  } else {
-
-    dosisConfirmada = false;
-
-    if (doseTableWrapper) {
-      doseTableWrapper.style.display = "none";
-    }
-
-    if (doseConfirmBox) {
-      doseConfirmBox.style.display = "none";
-    }
-
-    if (doseConfirmStatus) {
-      doseConfirmStatus.textContent = "";
-    }
-
+  if (doseHaWaterInput) {
+    doseHaWaterInput.value =
+      dosis?.tipo === "ha" ? dosis.aguaPorHectarea : "";
   }
 
+  seleccionarUnidad(dosis?.unidad || "cc");
 
-  alternarCamposFormulario(
-    tipo
-  );
+  // Los registros antiguos no deben convertirse automáticamente
+  // a una dosis nueva si no disponemos de sus datos originales.
+  if (!dosis && recipeApp) {
+    recipeApp.value = item.modo_aplicacion || "";
+  }
 
+  dosisConfirmada = Boolean(dosis);
 
   if (formTitle) {
-
-    formTitle.textContent =
-      "Editar producto";
-
+    formTitle.textContent = "Editar producto";
   }
-
 
   if (btnFormSubmit) {
-
-    btnFormSubmit.textContent =
-      "Actualizar producto";
-
+    btnFormSubmit.textContent = "Actualizar producto";
   }
 
+  if (btnFormCancel) {
+    btnFormCancel.style.display = "inline-block";
+  }
 
-  // Llevar al formulario
+  actualizarTablaDosis();
+
   if (sectionFormContainer) {
-
     sectionFormContainer.scrollIntoView({
       behavior: "smooth",
       block: "start"
     });
-
   }
-
 }
 
 
-// ------------------------------------------------------------
-// LIMPIAR FORMULARIO
-// ------------------------------------------------------------
+function resetearFormulario() {
+  if (recipeForm) recipeForm.reset();
 
-function limpiarFormulario() {
+  if (recipeId) recipeId.value = "";
 
-  if (!recipeForm) {
-    return;
+  if (tipoRegistroSelect) {
+    tipoRegistroSelect.value = mundoActual;
   }
 
-
-  recipeForm.reset();
-
-
-  if (recipeId) {
-    recipeId.value = "";
+  if (doseWaterBaseInput) {
+    doseWaterBaseInput.value = "100";
   }
-
-
-  if (recipeDoseWater) {
-    recipeDoseWater.value = 100;
-  }
-
 
   dosisConfirmada = false;
 
+  if (formTitle) {
+    formTitle.textContent = "Agregar Nuevo Producto";
+  }
+
+  if (btnFormSubmit) {
+    btnFormSubmit.textContent = "Guardar producto";
+    btnFormSubmit.disabled = false;
+  }
+
+  if (btnFormCancel) {
+    btnFormCancel.style.display = "none";
+  }
 
   if (doseTableWrapper) {
     doseTableWrapper.style.display = "none";
   }
 
-
   if (doseConfirmBox) {
-    doseConfirmBox.style.display = "none";
+    doseConfirmBox.style.display = "block";
   }
-
 
   if (doseValidationMessage) {
     doseValidationMessage.textContent = "";
   }
 
-
   if (doseConfirmationSummary) {
     doseConfirmationSummary.textContent = "";
   }
-
 
   if (doseConfirmStatus) {
     doseConfirmStatus.textContent = "";
   }
 
-
-  if (formTitle) {
-    formTitle.textContent = "Agregar producto";
-  }
-
-
-  if (btnFormSubmit) {
-    btnFormSubmit.textContent = "Guardar producto";
-  }
-
-
-  // Valores por defecto
-  if (tipoRegistroSelect) {
-    tipoRegistroSelect.value = mundoActual;
-  }
-
-
-  establecerUnidad("g");
-
-
-  alternarCamposFormulario(
-    mundoActual
-  );
-
+  seleccionarUnidad("cc");
+  alternarCamposFormulario(mundoActual);
 }
 
-
-// ------------------------------------------------------------
-// CONSTRUIR DATOS DEL FORMULARIO
-// ------------------------------------------------------------
-
-function obtenerDatosFormulario() {
-
-  const tipo =
-    normalizarTipoRegistro(
-      tipoRegistroSelect?.value ||
-      mundoActual
-    );
-
-
-  const funciones =
-    obtenerFuncionesFormulario();
-
-
-  const plagas =
-    obtenerPlagasFormulario();
-
-
-  const dosis =
-    validarDosisFormulario();
-
-
-  if (!recipeName?.value?.trim()) {
-
-    return {
-      error:
-        "Debes ingresar el nombre del producto."
-    };
-
-  }
-
-
-  if (!funciones.length) {
-
-    return {
-      error:
-        "Debes seleccionar al menos una función."
-    };
-
-  }
-
-
-  if (!dosis.valida) {
-
-    return {
-      error:
-        dosis.mensaje ||
-        "La dosis no es válida."
-    };
-
-  }
-
-
-  const nombre =
-    recipeName.value.trim();
-
-
-  const datos = {
-
-    tipo_registro: tipo,
-
-    nombre,
-
-    funcion: funciones,
-
-    plagas_objetivo: plagas,
-
-    ingrediente_activo:
-      recipeActivo?.value?.trim() ||
-      "",
-
-    concentracion:
-      recipeConcentracion?.value?.trim() ||
-      "",
-
-    modo_accion:
-      obtenerModoAccionFormulario(),
-
-    carencia:
-      recipeCarencia?.value?.trim() ||
-      "",
-
-    reentrada:
-      recipeReentrada?.value?.trim() ||
-      "",
-
-    efectividad:
-      recipeEfectividad?.value?.trim() ||
-      "",
-
-    contraindicacion:
-      recipeContra?.value?.trim() ||
-      "",
-
-    ingredientes:
-      recipeIngredients?.value?.trim() ||
-      "",
-
-    preparacion:
-      recipePrep?.value?.trim() ||
-      "",
-
-    actualizado_el:
-      new Date().toISOString(),
-
-    actualizado_por:
-      auth.currentUser?.email ||
-      ""
-
-  };
-
-
-  // DOSIS
-  if (dosis.existe) {
-
-    datos.dosis_baja =
-      dosis.low;
-
-    datos.dosis_alta =
-      dosis.high;
-
-    datos.unidad_dosis =
-      dosis.unit;
-
-    datos.dosis_agua_base =
-      100;
-
-    datos.dosis_calculada =
-      dosis.tabla;
-
-    datos.dosis_confirmada =
-      true;
-
-    datos.dosis =
-      `${formatearNumero(dosis.low)}–${formatearNumero(dosis.high)} ${dosis.unit}/100 L`;
-
-    datos.modo_aplicacion =
-      generarTextoTablaDosis(
-        dosis.low,
-        dosis.high,
-        dosis.unit
-      );
-
-  } else {
-
-    datos.dosis_baja = null;
-    datos.dosis_alta = null;
-    datos.unidad_dosis = "";
-    datos.dosis_agua_base = 100;
-    datos.dosis_calculada = {};
-    datos.dosis_confirmada = false;
-    datos.dosis = "";
-    datos.modo_aplicacion = "";
-
-  }
-
-
-  return {
-    datos
-  };
-}
-
-
-// ------------------------------------------------------------
-// GUARDAR FORMULARIO
-// ------------------------------------------------------------
-
-if (recipeForm) {
-
-  recipeForm.addEventListener(
-    "submit",
-    async event => {
-
-      event.preventDefault();
-
-
-      if (!esAdmin || !auth.currentUser) {
-
-        alert(
-          "Acceso denegado.\n\nDebes iniciar sesión como administrador."
-        );
-
-        return;
-      }
-
-
-      const resultado =
-        obtenerDatosFormulario();
-
-
-      if (resultado.error) {
-
-        alert(
-          resultado.error
-        );
-
-        return;
-      }
-
-
-      const datos =
-        resultado.datos;
-
-
-      const id =
-        recipeId?.value?.trim() ||
-        "";
-
-
-      if (btnFormSubmit) {
-
-        btnFormSubmit.disabled = true;
-
-        btnFormSubmit.textContent =
-          id
-            ? "Actualizando..."
-            : "Guardando...";
-
-      }
-
-
-      try {
-
-        if (id) {
-
-          await updateDoc(
-            doc(db, "recetas", id),
-            datos
-          );
-
-          alert(
-            "Producto actualizado correctamente."
-          );
-
-        } else {
-
-          datos.creado_el =
-            new Date().toISOString();
-
-          datos.creado_por =
-            auth.currentUser.email || "";
-
-
-          await addDoc(
-            recetasRef,
-            datos
-          );
-
-          alert(
-            "Producto guardado correctamente."
-          );
-
-        }
-
-
-        limpiarFormulario();
-
-
-      } catch (error) {
-
-        console.error(
-          "Error guardando producto:",
-          error
-        );
-
-
-        alert(
-          "No se pudo guardar el producto.\n\n" +
-          obtenerMensajeFirebase(error)
-        );
-
-
-      } finally {
-
-        if (btnFormSubmit) {
-
-          btnFormSubmit.disabled = false;
-
-          btnFormSubmit.textContent =
-            id
-              ? "Actualizar producto"
-              : "Guardar producto";
-
-        }
-
-      }
-
-    }
-  );
-
-}
-
-
-// ------------------------------------------------------------
-// CANCELAR FORMULARIO
-// ------------------------------------------------------------
 
 if (btnFormCancel) {
-
-  btnFormCancel.addEventListener(
-    "click",
-    event => {
-
-      event.preventDefault();
-
-      limpiarFormulario();
-
-    }
-  );
-
+  btnFormCancel.addEventListener("click", resetearFormulario);
 }
 
 
-// ------------------------------------------------------------
-// DOSIS - EVENTOS
-// ------------------------------------------------------------
+// =========================================================
+// 10. GUARDAR PRODUCTOS
+// =========================================================
 
-if (recipeDoseLow) {
+if (recipeForm) {
+  recipeForm.addEventListener("submit", async event => {
+    event.preventDefault();
 
-  recipeDoseLow.addEventListener(
-    "input",
-    () => {
-
-      dosisConfirmada = false;
-
-      if (doseConfirmStatus) {
-        doseConfirmStatus.textContent = "";
-      }
-
-      actualizarTablaDosis();
-
+    if (!esAdmin || !auth.currentUser) {
+      alert("Acceso denegado: debes iniciar sesión como administrador.");
+      return;
     }
-  );
 
-}
+    const nombre = recipeName.value.trim();
 
-
-if (recipeDoseHigh) {
-
-  recipeDoseHigh.addEventListener(
-    "input",
-    () => {
-
-      dosisConfirmada = false;
-
-      if (doseConfirmStatus) {
-        doseConfirmStatus.textContent = "";
-      }
-
-      actualizarTablaDosis();
-
+    if (!nombre) {
+      alert("Ingresa el nombre del producto.");
+      recipeName.focus();
+      return;
     }
-  );
 
-}
+    const funciones = obtenerFunciones();
 
-
-doseUnitRadios.forEach(radio => {
-
-  radio.addEventListener(
-    "change",
-    () => {
-
-      dosisConfirmada = false;
-
-      if (doseConfirmStatus) {
-        doseConfirmStatus.textContent = "";
-      }
-
-      actualizarTablaDosis();
-
+    if (!funciones.length) {
+      alert("Selecciona al menos una función técnica.");
+      return;
     }
-  );
 
-});
+    const tipo = normalizarTipo(tipoRegistroSelect.value);
+    const datosDosis = obtenerDatosDosisFormulario();
 
+    const hayDosis =
+      doseTypeSelect?.value === "agua"
+        ? doseValueInput?.value !== ""
+        : doseLowInput?.value !== "" ||
+          doseHighInput?.value !== "" ||
+          doseHaWaterInput?.value !== "";
 
-// CONFIRMAR DOSIS
-if (btnConfirmDoses) {
+    if (hayDosis) {
+      const errorDosis = validarDatosDosis(datosDosis);
 
-  btnConfirmDoses.addEventListener(
-    "click",
-    event => {
-
-      event.preventDefault();
-
-
-      const resultado =
-        validarDosisFormulario();
-
-
-      if (!resultado.existe) {
-
-        alert(
-          "Primero debes ingresar una dosis."
-        );
-
+      if (errorDosis) {
+        alert(errorDosis);
         return;
       }
 
-
-      if (!resultado.valida) {
-
-        alert(
-          resultado.mensaje
-        );
-
+      if (!dosisConfirmada) {
+        alert("Revisa y confirma la tabla de dosificación antes de guardar.");
         return;
       }
-
-
-      dosisConfirmada = true;
-
-
-      if (doseConfirmBox) {
-        doseConfirmBox.style.display = "none";
-      }
-
-
-      if (doseConfirmStatus) {
-
-        doseConfirmStatus.textContent =
-          "✓ Dosis confirmada correctamente.";
-
-        doseConfirmStatus.style.color =
-          "#18794e";
-
-      }
-
     }
-  );
 
+    const ahora = new Date().toISOString();
+
+    const datos = {
+      tipo_registro: tipo,
+      nombre,
+      fabricante: recipeFabricante?.value?.trim() || "",
+      registro: recipeRegistro?.value?.trim() || "",
+      funcion: funciones,
+      plagas_objetivo: obtenerPlagas(),
+      actualizado_el: ahora,
+      actualizado_por: auth.currentUser.email || ""
+    };
+
+    // BIO
+    datos.efectividad = recipeEfectividad?.value || "";
+    datos.contraindicacion = recipeContra?.value?.trim() || "";
+    datos.ingredientes = recipeIngredients?.value?.trim() || "";
+    datos.preparacion = recipePrep?.value?.trim() || "";
+
+    // QUÍMICO
+    datos.ingrediente_activo = recipeActivo?.value?.trim() || "";
+    datos.concentracion = recipeConcentracion?.value?.trim() || "";
+    datos.modo_accion = obtenerModosAccion();
+    datos.carencia = recipeCarencia?.value?.trim() || "";
+    datos.reentrada = recipeReentrada?.value?.trim() || "";
+
+    // DOSIFICACIÓN
+    if (hayDosis) {
+      datos.tipo_dosificacion = datosDosis.tipo;
+      datos.unidad_dosis = datosDosis.unidad;
+      datos.dosis_minima = datosDosis.minima;
+      datos.dosis_maxima = datosDosis.maxima;
+      datos.volumen_agua_ha =
+        datosDosis.tipo === "ha"
+          ? datosDosis.aguaPorHectarea
+          : null;
+      datos.dosis_confirmada = true;
+
+      datos.dosis_original =
+        datosDosis.tipo === "ha"
+          ? `${formatearNumero(datosDosis.minima)}–${formatearNumero(datosDosis.maxima)} ${datosDosis.unidad}/ha; agua: ${formatearNumero(datosDosis.aguaPorHectarea)} L/ha`
+          : `${formatearNumero(datosDosis.minima)} ${datosDosis.unidad}/100 L`;
+
+      datos.modo_aplicacion = datos.dosis_original;
+    } else {
+      // No inventar una dosis cuando no se ha introducido.
+      datos.tipo_dosificacion = "";
+      datos.unidad_dosis = "";
+      datos.dosis_minima = null;
+      datos.dosis_maxima = null;
+      datos.volumen_agua_ha = null;
+      datos.dosis_confirmada = false;
+
+      // Conservar el texto anterior si se está editando un producto antiguo
+      // y el usuario no ha ingresado una nueva dosis.
+      const existente = todosLosDatos.find(r => r.id === recipeId.value);
+
+      datos.modo_aplicacion =
+        existente?.modo_aplicacion || "";
+    }
+
+    if (btnFormSubmit) {
+      btnFormSubmit.disabled = true;
+      btnFormSubmit.textContent = "Guardando...";
+    }
+
+    try {
+      const id = recipeId.value.trim();
+
+      if (id) {
+        await updateDoc(doc(db, "recetas", id), datos);
+        alert("Producto actualizado correctamente.");
+      } else {
+        datos.creado_el = ahora;
+        datos.creado_por = auth.currentUser.email || "";
+
+        await addDoc(recetasRef, datos);
+        alert("Producto registrado correctamente.");
+      }
+
+      resetearFormulario();
+    } catch (error) {
+      console.error("Error guardando producto:", error);
+      alert("No se pudo guardar el producto.\n\n" + obtenerMensajeError(error));
+    } finally {
+      if (btnFormSubmit) {
+        btnFormSubmit.disabled = false;
+        btnFormSubmit.textContent =
+          recipeId?.value ? "Actualizar producto" : "Guardar producto";
+      }
+    }
+  });
 }
 
 
-// CANCELAR CONFIRMACIÓN
-if (btnCancelDoses) {
+// =========================================================
+// 11. TARJETAS DE PRODUCTOS
+// =========================================================
 
-  btnCancelDoses.addEventListener(
-    "click",
-    event => {
+function renderizarTarjeta(item) {
+  const tipo = normalizarTipo(item.tipo_registro);
+  const esQuimico = tipo === "quimico";
 
-      event.preventDefault();
+  const nombre = escaparHTML(item.nombre || "Producto sin nombre");
+  const funciones = convertirArray(item.funcion);
+  const plagas = convertirArray(item.plagas_objetivo);
 
-      dosisConfirmada = false;
+  const etiquetas = funciones
+    .map(f => `<span class="tag">${escaparHTML(f)}</span>`)
+    .join("");
 
+  const plagasHTML = plagas.length
+    ? `<p><strong>Plagas o enfermedades:</strong> ${plagas.map(escaparHTML).join(", ")}</p>`
+    : "";
 
-      if (doseConfirmBox) {
-        doseConfirmBox.style.display = "none";
-      }
+  const botonesAdmin = esAdmin
+    ? `
+      <div class="action-buttons">
+        <button type="button" class="btn-action btn-edit" data-id="${escaparHTML(item.id)}" aria-label="Editar producto">✏️ Editar</button>
+        <button type="button" class="btn-action btn-delete" data-id="${escaparHTML(item.id)}" aria-label="Eliminar producto">🗑️ Eliminar</button>
+      </div>
+    `
+    : "";
 
+  let detalles = "";
 
-      if (doseConfirmStatus) {
+  if (esQuimico) {
+    detalles = `
+      <p><strong>Ingrediente activo:</strong> ${escaparHTML(item.ingrediente_activo || "No especificado")}</p>
+      <p><strong>Concentración:</strong> ${escaparHTML(item.concentracion || "No especificada")}</p>
+      <p><strong>Modo de acción:</strong> ${escaparHTML(convertirArray(item.modo_accion).join(", ") || "No especificado")}</p>
+      <p><strong>Carencia:</strong> ${escaparHTML(item.carencia || "No indicado")}</p>
+      <p><strong>Reentrada:</strong> ${escaparHTML(item.reentrada || "No indicado")}</p>
+    `;
+  } else {
+    detalles = `
+      <p><strong>Efectividad:</strong> ${escaparHTML(item.efectividad || "En evaluación")}</p>
+      <p><strong>Ingredientes:</strong> ${escaparHTML(item.ingredientes || "No especificados")}</p>
+      <p><strong>Preparación:</strong> ${escaparHTML(item.preparacion || "No especificada")}</p>
+      <p><strong>Advertencias:</strong> ${escaparHTML(item.contraindicacion || "No indicadas")}</p>
+    `;
+  }
 
-        doseConfirmStatus.textContent =
-          "Dosis pendiente de confirmación.";
+  const fabricante = item.fabricante
+    ? `<p><strong>Fabricante:</strong> ${escaparHTML(item.fabricante)}</p>`
+    : "";
 
-        doseConfirmStatus.style.color =
-          "#b54708";
+  const registro = item.registro
+    ? `<p><strong>Registro:</strong> ${escaparHTML(item.registro)}</p>`
+    : "";
 
-      }
+  return `
+    <div class="recipe-card ${esQuimico ? "card-qui" : "card-bio"}">
+      ${botonesAdmin}
 
-    }
-  );
+      <h3 class="${esQuimico ? "qui-title" : ""}">${nombre}</h3>
 
+      <div class="recipe-tags">
+        ${etiquetas}
+      </div>
+
+      ${fabricante}
+      ${registro}
+      ${plagasHTML}
+
+      ${renderizarDosisTarjeta(item)}
+
+      <button
+        type="button"
+        class="btn-toggle ${esQuimico ? "qui-toggle" : ""}"
+        data-id="${escaparHTML(item.id)}">
+        Ver detalles
+      </button>
+
+      <div class="extra-content" id="extra-${escaparHTML(item.id)}" style="display:none;">
+        ${detalles}
+      </div>
+    </div>
+  `;
 }
 
 
-// ------------------------------------------------------------
-// TIPO DE REGISTRO
-// ------------------------------------------------------------
+function asignarEventosTarjetas() {
+  document.querySelectorAll(".btn-toggle").forEach(button => {
+    button.addEventListener("click", () => {
+      const id = button.dataset.id;
+      const panel = document.getElementById(`extra-${id}`);
 
-if (tipoRegistroSelect) {
+      if (!panel) return;
 
-  tipoRegistroSelect.addEventListener(
-    "change",
-    () => {
-
-      const tipo =
-        normalizarTipoRegistro(
-          tipoRegistroSelect.value
-        );
-
-      alternarCamposFormulario(
-        tipo
-      );
-
-    }
-  );
-
-}
-
-
-// ------------------------------------------------------------
-// FILTROS
-// ------------------------------------------------------------
-
-document
-  .querySelectorAll(".btn-filter")
-  .forEach(button => {
-
-    button.addEventListener(
-      "click",
-      () => {
-
-        establecerFiltroFuncion(
-          button.dataset.funcion ||
-          "todos"
-        );
-
-      }
-    );
-
+      const visible = panel.style.display === "block";
+      panel.style.display = visible ? "none" : "block";
+      button.textContent = visible ? "Ver detalles" : "Ocultar detalles";
+    });
   });
 
+  if (!esAdmin) return;
 
-// ------------------------------------------------------------
-// BÚSQUEDA
-// ------------------------------------------------------------
+  document.querySelectorAll(".btn-edit").forEach(button => {
+    button.addEventListener("click", () => {
+      const item = todosLosDatos.find(r => r.id === button.dataset.id);
 
-if (searchInput) {
+      if (item) cargarItemEnFormulario(item);
+    });
+  });
 
-  searchInput.addEventListener(
-    "input",
-    event => {
+  document.querySelectorAll(".btn-delete").forEach(button => {
+    button.addEventListener("click", async () => {
+      const id = button.dataset.id;
+      const item = todosLosDatos.find(r => r.id === id);
 
-      establecerBusqueda(
-        event.target.value
+      if (!item) return;
+
+      const confirmar = confirm(
+        `¿Deseas eliminar el producto "${item.nombre || "sin nombre"}"?`
       );
 
+      if (!confirmar) return;
+
+      try {
+        await deleteDoc(doc(db, "recetas", id));
+        alert("Producto eliminado correctamente.");
+      } catch (error) {
+        console.error("Error eliminando producto:", error);
+        alert("No se pudo eliminar el producto.\n\n" + obtenerMensajeError(error));
+      }
+    });
+  });
+}
+
+
+// =========================================================
+// 12. BÚSQUEDA, FILTROS Y MÉTRICAS
+// =========================================================
+
+function calcularMetricasYRender() {
+  const datosMundo = todosLosDatos.filter(
+    item => normalizarTipo(item.tipo_registro) === mundoActual
+  );
+
+  if (statTotal) {
+    statTotal.textContent = datosMundo.length;
+  }
+
+  const cantidadCondicional = datosMundo.filter(item => {
+    if (mundoActual === "bio") {
+      return normalizarTexto(item.efectividad).includes("alta");
     }
-  );
 
-}
+    return convertirArray(item.modo_accion)
+      .map(normalizarTexto)
+      .includes("sistemico");
+  }).length;
 
+  const statAltaActual = document.getElementById("stat-alta");
 
-// ------------------------------------------------------------
-// CAMBIO DE MUNDO
-// ------------------------------------------------------------
+  if (statAltaActual) {
+    statAltaActual.textContent = cantidadCondicional;
+  }
 
-if (btnWorldBio) {
+  if (!recipesContainer) return;
 
-  btnWorldBio.addEventListener(
-    "click",
-    () => cambiarMundo("bio")
-  );
-
-}
-
-
-if (btnWorldQui) {
-
-  btnWorldQui.addEventListener(
-    "click",
-    () => cambiarMundo("quimico")
-  );
-
-}
-
-
-// ------------------------------------------------------------
-// LOGIN
-// ------------------------------------------------------------
-
-function abrirLogin() {
-
-  if (!loginModal) {
-
-    console.error(
-      "No existe #login-modal en index.html"
-    );
-
+  if (errorLecturaFirebase) {
+    recipesContainer.innerHTML = `
+      <div class="firebase-error">
+        <h3>No se pudieron cargar los productos</h3>
+        <p>${escaparHTML(obtenerMensajeError(errorLecturaFirebase))}</p>
+      </div>
+    `;
     return;
   }
 
+  const busqueda = normalizarTexto(searchInput?.value || "");
 
-  loginModal.style.display = "flex";
-  loginModal.style.visibility = "visible";
-  loginModal.style.opacity = "1";
+  const filtrados = datosMundo.filter(item => {
+    const funciones = convertirArray(item.funcion).map(normalizarTexto);
+    const plagas = convertirArray(item.plagas_objetivo);
 
+    const contenido = [
+      item.nombre,
+      item.fabricante,
+      item.registro,
+      item.ingrediente_activo,
+      item.concentracion,
+      item.ingredientes,
+      item.preparacion,
+      item.carencia,
+      item.reentrada,
+      item.modo_aplicacion,
+      ...funciones,
+      ...plagas
+    ].join(" ");
 
-  const emailInput =
-    document.getElementById(
-      "login-email"
-    );
+    const coincideTexto =
+      normalizarTexto(contenido).includes(busqueda);
 
+    const coincideFuncion =
+      filtroFuncionActual === "todos" ||
+      funciones.includes(normalizarTexto(filtroFuncionActual));
 
-  if (emailInput) {
+    return coincideTexto && coincideFuncion;
+  });
 
-    setTimeout(
-      () => emailInput.focus(),
-      100
-    );
-
+  if (!filtrados.length) {
+    recipesContainer.innerHTML =
+      '<p class="loading-text">No se encontraron productos registrados.</p>';
+    return;
   }
 
+  recipesContainer.innerHTML =
+    filtrados.map(renderizarTarjeta).join("");
+
+  asignarEventosTarjetas();
+}
+
+
+if (searchInput) {
+  searchInput.addEventListener("input", calcularMetricasYRender);
+}
+
+
+filterButtons.forEach(button => {
+  button.addEventListener("click", () => {
+    filtroFuncionActual =
+      normalizarTexto(button.dataset.funcion || "todos");
+
+    filterButtons.forEach(btn => {
+      btn.style.background =
+        normalizarTexto(btn.dataset.funcion || "todos") === filtroFuncionActual
+          ? "#81c784"
+          : "#f1f8e9";
+    });
+
+    calcularMetricasYRender();
+  });
+});
+
+
+// =========================================================
+// 13. INICIO Y CIERRE DE SESIÓN
+// =========================================================
+
+function abrirLogin() {
+  if (!loginModal) return;
+
+  loginModal.style.display = "flex";
+
+  const email = document.getElementById("login-email");
+
+  if (email) {
+    setTimeout(() => email.focus(), 100);
+  }
 }
 
 
 function cerrarLogin() {
-
-  if (!loginModal) {
-    return;
-  }
-
-  loginModal.style.display = "none";
-
+  if (loginModal) loginModal.style.display = "none";
 }
 
 
 if (btnOpenLogin) {
-
-  btnOpenLogin.addEventListener(
-    "click",
-    event => {
-
-      event.preventDefault();
-
-      abrirLogin();
-
-    }
-  );
-
+  btnOpenLogin.addEventListener("click", abrirLogin);
 }
-
 
 if (btnCloseLogin) {
-
-  btnCloseLogin.addEventListener(
-    "click",
-    event => {
-
-      event.preventDefault();
-
-      cerrarLogin();
-
-    }
-  );
-
+  btnCloseLogin.addEventListener("click", cerrarLogin);
 }
 
-
-// Cerrar al hacer clic fuera
 if (loginModal) {
-
-  loginModal.addEventListener(
-    "click",
-    event => {
-
-      if (
-        event.target === loginModal
-      ) {
-
-        cerrarLogin();
-
-      }
-
-    }
-  );
-
+  loginModal.addEventListener("click", event => {
+    if (event.target === loginModal) cerrarLogin();
+  });
 }
 
-
-// ------------------------------------------------------------
-// LOGIN SUBMIT
-// ------------------------------------------------------------
 
 if (loginForm) {
+  loginForm.addEventListener("submit", async event => {
+    event.preventDefault();
 
-  loginForm.addEventListener(
-    "submit",
-    async event => {
+    const email = document.getElementById("login-email")?.value?.trim() || "";
+    const password = document.getElementById("login-password")?.value || "";
 
-      event.preventDefault();
-
-
-      const emailInput =
-        document.getElementById(
-          "login-email"
-        );
-
-      const passwordInput =
-        document.getElementById(
-          "login-password"
-        );
-
-
-      const email =
-        emailInput?.value?.trim() ||
-        "";
-
-      const password =
-        passwordInput?.value ||
-        "";
-
-
-      if (!email || !password) {
-
-        alert(
-          "Ingresa correo y contraseña."
-        );
-
-        return;
-      }
-
-
-      const submitButton =
-        loginForm.querySelector(
-          'button[type="submit"]'
-        );
-
-
-      if (submitButton) {
-
-        submitButton.disabled = true;
-
-        submitButton.textContent =
-          "Ingresando...";
-
-      }
-
-
-      try {
-
-        await signInWithEmailAndPassword(
-          auth,
-          email,
-          password
-        );
-
-
-        cerrarLogin();
-
-        loginForm.reset();
-
-
-        alert(
-          "¡Bienvenido al modo administrador!"
-        );
-
-
-      } catch (error) {
-
-        console.error(
-          "Error de inicio de sesión:",
-          error
-        );
-
-
-        alert(
-          obtenerMensajeLogin(error)
-        );
-
-
-      } finally {
-
-        if (submitButton) {
-
-          submitButton.disabled = false;
-
-          submitButton.textContent =
-            "Ingresar";
-
-        }
-
-      }
-
+    try {
+      await signInWithEmailAndPassword(auth, email, password);
+      cerrarLogin();
+      loginForm.reset();
+      alert("¡Bienvenido al modo administrador!");
+    } catch (error) {
+      console.error("Error de acceso:", error);
+      alert("No se pudo iniciar sesión.\n\n" + obtenerMensajeError(error));
     }
-  );
-
+  });
 }
 
-
-// ------------------------------------------------------------
-// LOGOUT
-// ------------------------------------------------------------
 
 if (btnLogout) {
-
-  btnLogout.addEventListener(
-    "click",
-    async event => {
-
-      event.preventDefault();
-
-
-      try {
-
-        await signOut(auth);
-
-        alert(
-          "Sesión cerrada."
-        );
-
-      } catch (error) {
-
-        console.error(
-          "Error cerrando sesión:",
-          error
-        );
-
-        alert(
-          "No se pudo cerrar la sesión."
-        );
-
-      }
-
+  btnLogout.addEventListener("click", async () => {
+    try {
+      await signOut(auth);
+      alert("Sesión cerrada.");
+    } catch (error) {
+      console.error("Error cerrando sesión:", error);
+      alert("No se pudo cerrar la sesión.");
     }
-  );
-
+  });
 }
 
 
-// ------------------------------------------------------------
-// ESTADO DE AUTENTICACIÓN
-// ------------------------------------------------------------
+onAuthStateChanged(auth, user => {
+  usuarioActual = user;
+  esAdmin = Boolean(user);
 
-onAuthStateChanged(
-  auth,
-  user => {
+  if (btnOpenLogin) {
+    btnOpenLogin.style.display = esAdmin ? "none" : "inline-block";
+  }
 
-    esAdmin = !!user;
+  if (adminLoggedInfo) {
+    adminLoggedInfo.style.display = esAdmin ? "inline-block" : "none";
 
-
-    if (user) {
-
-      // ADMIN CONECTADO
-
-      if (btnOpenLogin) {
-
-        btnOpenLogin.style.display =
-          "none";
-
-      }
-
-
-      if (adminLoggedInfo) {
-
-        adminLoggedInfo.style.display =
-          "inline-block";
-
-        // Mostrar correo si el elemento lo permite
-        if (
-          adminLoggedInfo.dataset.originalText ===
-          undefined
-        ) {
-
-          adminLoggedInfo.dataset.originalText =
-            adminLoggedInfo.textContent || "";
-
-        }
-
-
-        adminLoggedInfo.textContent =
-          `Administrador: ${user.email || ""}`;
-
-      }
-
-
-      if (sectionFormContainer) {
-
-        sectionFormContainer.style.display =
-          "block";
-
-      }
-
-
-    } else {
-
-      // NO ADMIN
-
-      if (btnOpenLogin) {
-
-        btnOpenLogin.style.display =
-          "inline-block";
-
-      }
-
-
-      if (adminLoggedInfo) {
-
-        adminLoggedInfo.style.display =
-          "none";
-
-      }
-
-
-      if (sectionFormContainer) {
-
-        sectionFormContainer.style.display =
-          "none";
-
-      }
-
+    if (esAdmin) {
+      adminLoggedInfo.textContent =
+        `👤 Administrador: ${user.email || ""}`;
     }
-
-
-    // Volver a renderizar para mostrar/ocultar
-    // botones Editar y Eliminar
-    calcularMetricasYRender();
-
-  }
-);
-
-
-// ------------------------------------------------------------
-// MENSAJES FIREBASE
-// ------------------------------------------------------------
-
-function obtenerMensajeLogin(error) {
-
-  const code =
-    error?.code || "";
-
-
-  switch (code) {
-
-    case "auth/invalid-email":
-      return "El correo electrónico no es válido.";
-
-    case "auth/user-not-found":
-      return "No existe un usuario con ese correo.";
-
-    case "auth/wrong-password":
-      return "La contraseña es incorrecta.";
-
-    case "auth/invalid-credential":
-      return "Correo o contraseña incorrectos.";
-
-    case "auth/too-many-requests":
-      return "Demasiados intentos. Espera unos minutos e inténtalo nuevamente.";
-
-    case "auth/network-request-failed":
-      return "No hay conexión con Firebase. Revisa Internet.";
-
-    case "auth/user-disabled":
-      return "Esta cuenta de administrador está deshabilitada.";
-
-    case "auth/operation-not-allowed":
-      return "El método de acceso por correo y contraseña no está habilitado en Firebase Authentication.";
-
-    default:
-      return (
-        "No se pudo iniciar sesión.\n\n" +
-        (error?.message || "Error desconocido.")
-      );
-
   }
 
-}
-
-
-function obtenerMensajeFirebase(error) {
-
-  const code =
-    error?.code || "";
-
-
-  if (
-    code ===
-    "permission-denied"
-  ) {
-
-    return (
-      "Firebase rechazó la operación por permisos. " +
-      "Revisa las reglas de Firestore y que el usuario administrador esté autenticado."
-    );
-
+  if (sectionFormContainer) {
+    sectionFormContainer.style.display = esAdmin ? "block" : "none";
   }
 
-
-  if (
-    code ===
-    "unavailable"
-  ) {
-
-    return (
-      "Firebase no está disponible en este momento. Revisa la conexión a Internet."
-    );
-
-  }
+  calcularMetricasYRender();
+});
 
 
-  if (
-    code ===
-    "failed-precondition"
-  ) {
-
-    return (
-      "Firebase indicó que falta una configuración o índice requerido."
-    );
-
-  }
-
-
-  return (
-    error?.message ||
-    "Error desconocido de Firebase."
-  );
-
-}
-
-
-// ------------------------------------------------------------
-// FIRESTORE - CARGAR PRODUCTOS EN TIEMPO REAL
-// ------------------------------------------------------------
+// =========================================================
+// 14. FIRESTORE EN TIEMPO REAL
+// =========================================================
 
 onSnapshot(
-
-  recetasRef,
+  query(recetasRef),
 
   snapshot => {
-
+    errorLecturaFirebase = null;
     todosLosDatos = [];
 
+    snapshot.forEach(documento => {
+      todosLosDatos.push({
+        id: documento.id,
+        ...documento.data()
+      });
+    });
 
-    snapshot.forEach(
-      documento => {
-
-        todosLosDatos.push({
-
-          id: documento.id,
-
-          ...documento.data()
-
-        });
-
-      }
+    todosLosDatos.sort((a, b) =>
+      String(a.nombre || "").localeCompare(
+        String(b.nombre || ""),
+        "es",
+        { sensitivity: "base" }
+      )
     );
-
-
-    // Ordenar por nombre
-    todosLosDatos.sort(
-      (a, b) =>
-        String(a.nombre || "")
-          .localeCompare(
-            String(b.nombre || ""),
-            "es",
-            {
-              sensitivity: "base"
-            }
-          )
-    );
-
 
     console.log(
-      `Firestore: ${todosLosDatos.length} productos cargados.`
+      `SanidadApp: ${todosLosDatos.length} productos cargados desde Firebase.`
     );
 
-
     calcularMetricasYRender();
-
   },
 
   error => {
+    errorLecturaFirebase = error;
 
-    console.error(
-      "ERROR LEYENDO FIRESTORE:",
-      error
-    );
+    console.error("Error leyendo productos de Firestore:", error);
 
-
-    todosLosDatos = [];
-
-
-    if (recipesContainer) {
-
-      recipesContainer.innerHTML = `
-
-        <div
-          class="firebase-error"
-          style="
-            padding:20px;
-            border:1px solid #f1aeb5;
-            background:#fff5f5;
-            border-radius:10px;
-            color:#842029;
-            margin:15px 0;
-          "
-        >
-
-          <h3>
-            No se pudieron cargar los productos
-          </h3>
-
-          <p>
-            Firebase rechazó o no pudo realizar
-            la lectura de la colección
-            <strong>recetas</strong>.
-          </p>
-
-          <p>
-            Código:
-            <strong>
-              ${escapeHTML(error?.code || "desconocido")}
-            </strong>
-          </p>
-
-          <p>
-            ${escapeHTML(
-              obtenerMensajeFirebase(error)
-            )}
-          </p>
-
-          <p>
-            Si el código es
-            <strong>permission-denied</strong>,
-            revisa las reglas de Firestore.
-          </p>
-
-        </div>
-
-      `;
-
-    }
-
-
-    if (statTotal) {
-      statTotal.textContent = "—";
-    }
-
+    calcularMetricasYRender();
   }
-
 );
 
 
-// ------------------------------------------------------------
-// INTELIGENCIA ARTIFICIAL
-// ------------------------------------------------------------
-
-async function ejecutarAnalisisIA() {
-
-  if (!aiImageInput) {
-
-    alert(
-      "No se encontró el selector de imagen de IA."
-    );
-
-    return;
-  }
-
-
-  const file =
-    aiImageInput.files?.[0];
-
-
-  if (!file) {
-
-    alert(
-      "Selecciona primero una imagen de la etiqueta."
-    );
-
-    return;
-  }
-
-
-  if (!esAdmin) {
-
-    alert(
-      "Debes iniciar sesión como administrador para utilizar esta función."
-    );
-
-    return;
-  }
-
-
-  try {
-
-    if (aiLoading) {
-      aiLoading.style.display = "block";
-    }
-
-
-    if (btnTriggerAI) {
-      btnTriggerAI.disabled = true;
-    }
-
-
-    const resultado =
-      await analizarEtiqueta(file);
-
-
-    console.log(
-      "Resultado IA:",
-      resultado
-    );
-
-
-    if (
-      !resultado ||
-      resultado.ok === false
-    ) {
-
-      throw new Error(
-        resultado?.error ||
-        "La IA no pudo analizar la etiqueta."
-      );
-
-    }
-
-
-    const datos =
-      resultado.datos ||
-      resultado.data ||
-      {};
-
-
-    // --------------------------------------------------------
-    // DATOS QUE SÍ COMPLETA LA IA
-    // --------------------------------------------------------
-
-    if (recipeName) {
-
-      recipeName.value =
-        datos.nombre ||
-        datos.producto ||
-        "";
-
-    }
-
-
-    if (recipeActivo) {
-
-      recipeActivo.value =
-        datos.ingrediente_activo ||
-        datos.principio_activo ||
-        "";
-
-    }
-
-
-    if (recipeConcentracion) {
-
-      recipeConcentracion.value =
-        datos.concentracion ||
-        "";
-
-    }
-
-
-    // FUNCIONES
-    if (datos.funcion) {
-
-      cargarFuncionesFormulario(
-        datos.funcion
-      );
-
-    }
-
-
-    // MODO DE ACCIÓN
-    if (datos.modo_accion) {
-
-      cargarModoAccionFormulario(
-        datos.modo_accion
-      );
-
-    }
-
-
-    // Fabricante / registro pueden existir
-    // aunque no tengan campos específicos
-    // en el formulario actual.
-
-
-    // --------------------------------------------------------
-    // IMPORTANTE:
-    // LA IA NO COMPLETA:
-    //
-    // - PLAGAS
-    // - DOSIS
-    // - UNIDAD
-    // - CARENCIA
-    // - REENTRADA
-    //
-    // ESOS DATOS SE INGRESAN MANUALMENTE.
-    // --------------------------------------------------------
-
-
-    cargarPlagasFormulario([]);
-
-
-    if (recipeDoseLow) {
-      recipeDoseLow.value = "";
-    }
-
-
-    if (recipeDoseHigh) {
-      recipeDoseHigh.value = "";
-    }
-
-
-    establecerUnidad("g");
-
-
-    dosisConfirmada = false;
-
-
-    if (doseTableWrapper) {
-      doseTableWrapper.style.display = "none";
-    }
-
-
-    if (doseConfirmBox) {
-      doseConfirmBox.style.display = "none";
-    }
-
-
-    if (doseConfirmStatus) {
-      doseConfirmStatus.textContent = "";
-    }
-
-
-    if (recipeCarencia) {
-      recipeCarencia.value = "";
-    }
-
-
-    if (recipeReentrada) {
-      recipeReentrada.value = "";
-    }
-
-
-    alert(
-      "Análisis completado.\n\n" +
-      "La IA completó los datos identificables de la etiqueta. " +
-      "Debes revisar la información y completar manualmente plagas, dosis, carencia y reentrada."
-    );
-
-
-  } catch (error) {
-
-    console.error(
-      "Error analizando etiqueta:",
-      error
-    );
-
-
-    alert(
-      "No se pudo analizar la etiqueta.\n\n" +
-      (error?.message ||
-        "Error desconocido.")
-    );
-
-
-  } finally {
-
-    if (aiLoading) {
-      aiLoading.style.display = "none";
-    }
-
-
-    if (btnTriggerAI) {
-      btnTriggerAI.disabled = false;
-    }
-
-  }
-
+// =========================================================
+// 15. INICIALIZACIÓN
+// =========================================================
+
+if (doseWaterBaseInput) {
+  doseWaterBaseInput.value = "100";
 }
-
-
-if (btnTriggerAI) {
-
-  btnTriggerAI.addEventListener(
-    "click",
-    event => {
-
-      event.preventDefault();
-
-      ejecutarAnalisisIA();
-
-    }
-  );
-
-}
-
-
-// ------------------------------------------------------------
-// INICIALIZACIÓN
-// ------------------------------------------------------------
-
-if (recipeDoseWater) {
-  recipeDoseWater.value = 100;
-}
-
-
-alternarCamposFormulario(
-  mundoActual
-);
-
-
-if (btnWorldBio) {
-  btnWorldBio.classList.add("active");
-}
-
 
 if (sectionFormContainer) {
-
-  // Mientras Firebase Authentication determina
-  // si existe una sesión, ocultamos el formulario.
-  sectionFormContainer.style.display =
-    "none";
-
+  sectionFormContainer.style.display = "none";
 }
 
+if (doseTableWrapper) {
+  doseTableWrapper.style.display = "none";
+}
 
-// Estado inicial de filtros
-document
-  .querySelectorAll(".btn-filter")
-  .forEach(button => {
-
-    const filtro =
-      normalizarTexto(
-        button.dataset.funcion ||
-        "todos"
-      );
-
-    if (filtro === "todos") {
-
-      button.classList.add(
-        "active"
-      );
-
-    }
-
-  });
-
+alternarCamposFormulario(mundoActual);
 
 console.log(
-  "SANIDADAPP / BIO IA iniciado correctamente."
+  "SanidadApp iniciado sin fotografía ni análisis de IA."
 );
